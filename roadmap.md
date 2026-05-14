@@ -505,6 +505,108 @@ pipeline, project memory, restart prompts. Ready for internal testing.
 - Usage/cost page: queries per model, estimated monthly spend
 - Memory hygiene: stale memory detection, archive old project memories
 - Conflict handling: when a new correction contradicts an old one, scope-narrow rather than delete
+- **"Look Under the Hood" panel** — see below
+
+### "Look Under the Hood" — model reliability panel
+
+Accessed via a button or dropdown in the right panel or settings. Hidden from
+casual users, available to anyone curious. Shows the same reliability scores
+(0–100) the models see in their own system prompts — giving users the same
+transparency the system gives to models.
+
+**Entry point:**
+A subtle button in the right panel or top menu — "Look under the hood ↓"
+Not prominent. Not in the main UI flow. Found by curious users.
+
+**What's inside:**
+
+One time-series graph per model with ≥10 queries and ≥2–3 data points.
+Models with fewer than 10 queries show a placeholder: "Not enough data yet —
+keep chatting to build a reliability history."
+
+```
+┌─ Look Under the Hood ────────────────────────────────────────────────┐
+│                                                                      │
+│  Model reliability scores — how each model has performed for you    │
+│  These are the same scores models see when answering your queries.  │
+│                                                                      │
+│  GPT-4o              Current: 74                                    │
+│  ┌────────────────────────────────────────────────────────┐         │
+│  │        ●                                               │         │
+│  │       ╱ ╲        ●─────●                               │         │
+│  │      ╱   ╲      ╱                                      │         │
+│  │  ●──╱     ╲────╱                                       │         │
+│  │  65  68  72  70  71  74                                │         │
+│  └────────────────────────────────────────────────────────┘         │
+│  May 1   May 5   May 9   May 12  May 14                             │
+│                                                                      │
+│  Claude Sonnet       Current: 81  ▲ trending up                     │
+│  ┌────────────────────────────────────────────────────────┐         │
+│  │                          ●──●                          │         │
+│  │                   ●─────╱                              │         │
+│  │              ●───╱                                     │         │
+│  │  ●───────────                                          │         │
+│  │  60  65  70  73  78  81                                │         │
+│  └────────────────────────────────────────────────────────┘         │
+│                                                                      │
+│  Gemini 1.5 Pro      Not enough data yet (4 queries)                │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Clickable data points:**
+Each point on the graph is clickable. Clicking a point opens an event card
+below the graph explaining exactly what caused the score to change at that
+moment:
+
+```
+┌─ Score event — May 9, GPT-4o: 72 → 70 (dropped) ────────────────────┐
+│                                                                      │
+│  Query:   "What is the time complexity of Timsort?"                 │
+│  GPT-4o answered:  O(n²) worst case                                 │
+│  Peer review:      Incorrect — Timsort is O(n log n) worst case     │
+│  Correction stored: yes                                             │
+│  Effect: reliability score −2                                       │
+│                                                                      │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+Score increases look like:
+```
+┌─ Score event — May 12, GPT-4o: 70 → 71 (improved) ──────────────────┐
+│  Query:   "Explain async/await in Python"                           │
+│  GPT-4o answered correctly                                          │
+│  Peer review: Claude agreed                                         │
+│  Effect: reliability score +1                                       │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Explainer section (below all graphs):**
+```
+How scores work
+
+Your models are scored on accuracy and calibration — the same way a
+doctor or analyst builds a track record. Scores go up when a model
+gives correct, appropriately confident answers. Scores go down when
+peer review catches an error or a past correction is contradicted.
+
+Models see their own scores and know they are being evaluated. This
+gives them an incentive to be honest about uncertainty rather than
+guessing confidently — which is what produces better answers for you.
+
+Scores start building after 10 queries per model. They are private
+to your device and never shared.
+```
+
+**Design rules:**
+- Minimum 10 queries before graph appears (shows placeholder below)
+- Minimum 2–3 time instances before line is drawn (single points show as dot only)
+- Y-axis: 0–100, fixed scale so scores are comparable across models
+- Clickable events stored in `audit_log` table — query text (truncated to
+  60 chars), peer review verdict, correction stored y/n, score delta
+- Raw query text is never stored in audit_log — only the first 60 chars
+  of the canonical form, to protect privacy if user shared sensitive info
+- No export, no sharing — read-only, local only
 
 **Deliverable:** v1.0 of AUA-Veritas. Ready for real users.
 
