@@ -53,4 +53,18 @@ with explicit user approval noted.
 
 | Date | File | Approved by | Reason |
 |---|---|---|---|
-| (none yet) | | | |
+| 2026-05-14 | 7 plugin files (see below) | User approved | Contribute prebuilt plugins to AUA |
+
+## Plugins contributed to AUA — 2026-05-14
+
+Approved by user. Direction: AUA-Veritas → AUA Framework.
+
+| Source (AUA-Veritas) | Destination (AUA) | Changes on copy |
+|---|---|---|
+| `core/plugins/openai_backend.py` | `aua/plugins/prebuilt/openai_backend.py` | Docstring contribution note updated |
+| `core/plugins/anthropic_backend.py` | `aua/plugins/prebuilt/anthropic_backend.py` | Same |
+| `core/plugins/google_backend.py` | `aua/plugins/prebuilt/google_backend.py` | Same |
+| `core/plugins/xai_backend.py` | `aua/plugins/prebuilt/xai_backend.py` | Import: `core.plugins.openai_backend` → `aua.plugins.prebuilt.openai_backend` |
+| `core/plugins/mistral_backend.py` | `aua/plugins/prebuilt/mistral_backend.py` | Same import update |
+| `core/plugins/groq_backend.py` | `aua/plugins/prebuilt/groq_backend.py` | Same import update |
+| `core/plugins/deepseek_backend.py` | `aua/plugins/prebuilt/deepseek_backend.py` | Same import update |
