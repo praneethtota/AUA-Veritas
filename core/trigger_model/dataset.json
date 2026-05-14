@@ -1,0 +1,1095 @@
+{
+  "metadata": {
+    "total": 270,
+    "train": 246,
+    "validation": 24,
+    "correction_train": 126,
+    "non_correction_train": 120,
+    "generation_method": "Designed to match Gemini Flash-Lite generation style",
+    "best_validation_f1": 1.0
+  },
+  "train": [
+    {
+      "text": "I prefer concise explanations, not verbose ones.",
+      "correction": true
+    },
+    {
+      "text": "Avoid streaming in Maximum mode — VCG needs all responses first.",
+      "correction": true
+    },
+    {
+      "text": "That's not what I asked. I said Postgres, not SQLite.",
+      "correction": true
+    },
+    {
+      "text": "These are not interchangeable — one is for writing, one is for reading.",
+      "correction": true
+    },
+    {
+      "text": "Don't merge these repositories.",
+      "correction": true
+    },
+    {
+      "text": "Create a configuration parser for YAML files.",
+      "correction": false
+    },
+    {
+      "text": "Let's continue with the implementation.",
+      "correction": false
+    },
+    {
+      "text": "Refactor this function to use a list comprehension.",
+      "correction": false
+    },
+    {
+      "text": "Write a Python script to benchmark latency.",
+      "correction": false
+    },
+    {
+      "text": "Actually, Gemini Flash is the extractor model, not GPT-4o mini.",
+      "correction": true
+    },
+    {
+      "text": "Can you rewrite this paragraph to be more concise?",
+      "correction": false
+    },
+    {
+      "text": "Create an async HTTP client using httpx.",
+      "correction": false
+    },
+    {
+      "text": "From now on the router should always fire pre_query hooks first.",
+      "correction": true
+    },
+    {
+      "text": "The correction store and the audit log serve different purposes.",
+      "correction": true
+    },
+    {
+      "text": "Avoid sending the full conversation history — use the correction store instead.",
+      "correction": true
+    },
+    {
+      "text": "Rename this file to router.py.",
+      "correction": false
+    },
+    {
+      "text": "From now on, always add type hints to every function.",
+      "correction": true
+    },
+    {
+      "text": "Let me correct that — it should be a POST endpoint.",
+      "correction": true
+    },
+    {
+      "text": "Write a decorator that retries on failure.",
+      "correction": false
+    },
+    {
+      "text": "I'll need to review this later.",
+      "correction": false
+    },
+    {
+      "text": "What are the 4 accuracy levels?",
+      "correction": false
+    },
+    {
+      "text": "What is the default model in GroqBackend?",
+      "correction": false
+    },
+    {
+      "text": "We are not merging AUA and AUA-Veritas into one repo.",
+      "correction": true
+    },
+    {
+      "text": "You misunderstood. I meant the field classifier, not the router.",
+      "correction": true
+    },
+    {
+      "text": "What is the difference between FastAPI and Flask?",
+      "correction": false
+    },
+    {
+      "text": "Can you elaborate on the first option?",
+      "correction": false
+    },
+    {
+      "text": "The peer review round always runs — it is not conditional.",
+      "correction": true
+    },
+    {
+      "text": "Create a FastAPI endpoint for health checks.",
+      "correction": false
+    },
+    {
+      "text": "Write a function that maps U scores to a 0-100 scale.",
+      "correction": false
+    },
+    {
+      "text": "We covered this: the label is AUA-Veritas not AUA-Prism.",
+      "correction": true
+    },
+    {
+      "text": "When does Sub-case B trigger in Balanced mode?",
+      "correction": false
+    },
+    {
+      "text": "We decided the app name is AUA-Veritas not AUA-Prism.",
+      "correction": true
+    },
+    {
+      "text": "The AUA Framework and AUA-Veritas are completely independent.",
+      "correction": true
+    },
+    {
+      "text": "What dependencies does this require?",
+      "correction": false
+    },
+    {
+      "text": "Wrong endpoint. It should be /api/v2 not /api/v1.",
+      "correction": true
+    },
+    {
+      "text": "What is the peer review model for Maximum accuracy?",
+      "correction": false
+    },
+    {
+      "text": "Never expose the welfare formula to the models — only the score trajectory.",
+      "correction": true
+    },
+    {
+      "text": "From now on always run mypy before committing.",
+      "correction": true
+    },
+    {
+      "text": "Yes exactly.",
+      "correction": false
+    },
+    {
+      "text": "Avoid adding unnecessary dependencies.",
+      "correction": true
+    },
+    {
+      "text": "Make this function recursive instead.",
+      "correction": false
+    },
+    {
+      "text": "Incorrect. FastAPI uses Pydantic v2 not v1 now.",
+      "correction": true
+    },
+    {
+      "text": "Let's keep going.",
+      "correction": false
+    },
+    {
+      "text": "Going forward, peer review should use the cheapest available model.",
+      "correction": true
+    },
+    {
+      "text": "Actually I want the VCG mechanism enabled by default.",
+      "correction": true
+    },
+    {
+      "text": "Let's come back to this.",
+      "correction": false
+    },
+    {
+      "text": "Stop suggesting camelCase — we use snake_case.",
+      "correction": true
+    },
+    {
+      "text": "Remember, always inject the correction store before calling the model.",
+      "correction": true
+    },
+    {
+      "text": "Incorrect. The method is async, not synchronous.",
+      "correction": true
+    },
+    {
+      "text": "Appreciate it.",
+      "correction": false
+    },
+    {
+      "text": "That contradicts what we decided earlier about the architecture.",
+      "correction": true
+    },
+    {
+      "text": "I prefer Postgres over SQLite for anything production.",
+      "correction": true
+    },
+    {
+      "text": "Wrong. Use snake_case for Python variables not camelCase.",
+      "correction": true
+    },
+    {
+      "text": "Convert this to JSON.",
+      "correction": false
+    },
+    {
+      "text": "We are using Electron for the desktop app, not Tauri.",
+      "correction": true
+    },
+    {
+      "text": "That's not right. We use JSONB not JSON in Postgres.",
+      "correction": true
+    },
+    {
+      "text": "Incorrect — the default is pairwise, not VCG.",
+      "correction": true
+    },
+    {
+      "text": "We are not merging these two concepts. They are separate products.",
+      "correction": true
+    },
+    {
+      "text": "The previous answer had an error — the complexity is O(n log n).",
+      "correction": true
+    },
+    {
+      "text": "Create a context manager for database connections.",
+      "correction": false
+    },
+    {
+      "text": "What is the time complexity of merge sort?",
+      "correction": false
+    },
+    {
+      "text": "Generate boilerplate for a new spaCy component.",
+      "correction": false
+    },
+    {
+      "text": "Remember the VCG formula: P times confidence times prior mean U.",
+      "correction": true
+    },
+    {
+      "text": "Write a migration script for the database schema.",
+      "correction": false
+    },
+    {
+      "text": "No no no — the endpoint is POST not GET.",
+      "correction": true
+    },
+    {
+      "text": "How does the AUA correction store work?",
+      "correction": false
+    },
+    {
+      "text": "How would I test this?",
+      "correction": false
+    },
+    {
+      "text": "Project scope and global scope corrections are handled differently.",
+      "correction": true
+    },
+    {
+      "text": "Always fire pre_query hooks before the field classifier.",
+      "correction": true
+    },
+    {
+      "text": "Can you explain what a Kalman filter does?",
+      "correction": false
+    },
+    {
+      "text": "Clean up the whitespace.",
+      "correction": false
+    },
+    {
+      "text": "I always want type hints included in generated code.",
+      "correction": true
+    },
+    {
+      "text": "Don't use a cloud API for every user message.",
+      "correction": true
+    },
+    {
+      "text": "Perfect, exactly what I needed.",
+      "correction": false
+    },
+    {
+      "text": "Fast mode and Balanced mode work very differently.",
+      "correction": true
+    },
+    {
+      "text": "Actually that function should be async.",
+      "correction": true
+    },
+    {
+      "text": "That's incorrect — Redis does not persist by default.",
+      "correction": true
+    },
+    {
+      "text": "VCG and pairwise arbitration are not the same mechanism.",
+      "correction": true
+    },
+    {
+      "text": "Can you show me an example?",
+      "correction": false
+    },
+    {
+      "text": "We chose GPL 3.0 for the license.",
+      "correction": true
+    },
+    {
+      "text": "Actually, it should be a POST not a GET request.",
+      "correction": true
+    },
+    {
+      "text": "No, that's wrong. It should be O(n log n), not O(n squared).",
+      "correction": true
+    },
+    {
+      "text": "Good point.",
+      "correction": false
+    },
+    {
+      "text": "Write a health check endpoint that tests all models.",
+      "correction": false
+    },
+    {
+      "text": "Write a pytest fixture for a mock model backend.",
+      "correction": false
+    },
+    {
+      "text": "Actually, always use dataclasses not NamedTuples for configs.",
+      "correction": true
+    },
+    {
+      "text": "Does this work with Python 3.10?",
+      "correction": false
+    },
+    {
+      "text": "Implement the store utility scoring formula.",
+      "correction": false
+    },
+    {
+      "text": "The router and the arbiter are distinct components.",
+      "correction": true
+    },
+    {
+      "text": "Actually the correct complexity is O(n log n) not O(n squared).",
+      "correction": true
+    },
+    {
+      "text": "This is getting complex.",
+      "correction": false
+    },
+    {
+      "text": "Let's take a step back.",
+      "correction": false
+    },
+    {
+      "text": "Avoid using global state in the router.",
+      "correction": true
+    },
+    {
+      "text": "Sure.",
+      "correction": false
+    },
+    {
+      "text": "Avoid hardcoding model names in the router.",
+      "correction": true
+    },
+    {
+      "text": "How are we doing on time?",
+      "correction": false
+    },
+    {
+      "text": "Could you expand on that?",
+      "correction": false
+    },
+    {
+      "text": "Going forward, store utility threshold is 0.85 for auto-save.",
+      "correction": true
+    },
+    {
+      "text": "Remove the duplicate lines.",
+      "correction": false
+    },
+    {
+      "text": "Great explanation.",
+      "correction": false
+    },
+    {
+      "text": "Avoid calling external APIs in the trigger detector layer.",
+      "correction": true
+    },
+    {
+      "text": "I prefer async code patterns throughout this codebase.",
+      "correction": true
+    },
+    {
+      "text": "Excellent, let's continue.",
+      "correction": false
+    },
+    {
+      "text": "OK.",
+      "correction": false
+    },
+    {
+      "text": "Store utility and include utility are different scoring functions.",
+      "correction": true
+    },
+    {
+      "text": "That's the third time you said O(n squared). It's O(n log n).",
+      "correction": true
+    },
+    {
+      "text": "Generate a requirements.txt for this project.",
+      "correction": false
+    },
+    {
+      "text": "Add comments to this code.",
+      "correction": false
+    },
+    {
+      "text": "That's helpful.",
+      "correction": false
+    },
+    {
+      "text": "What is the difference between scope A and scope B corrections?",
+      "correction": false
+    },
+    {
+      "text": "No — we use GPL 3.0 not MIT for this project.",
+      "correction": true
+    },
+    {
+      "text": "Shorten this docstring.",
+      "correction": false
+    },
+    {
+      "text": "Don't expose the utility formula to the models.",
+      "correction": true
+    },
+    {
+      "text": "That's a fair observation.",
+      "correction": false
+    },
+    {
+      "text": "I want to understand this better.",
+      "correction": false
+    },
+    {
+      "text": "How does this scale?",
+      "correction": false
+    },
+    {
+      "text": "Translate this to Spanish.",
+      "correction": false
+    },
+    {
+      "text": "We decided to use the OS keychain for API key storage.",
+      "correction": true
+    },
+    {
+      "text": "That works perfectly.",
+      "correction": false
+    },
+    {
+      "text": "What's the memory footprint?",
+      "correction": false
+    },
+    {
+      "text": "I prefer Python over JavaScript for this project.",
+      "correction": true
+    },
+    {
+      "text": "I always want docstrings included on public functions.",
+      "correction": true
+    },
+    {
+      "text": "Correction: the model is always selected by welfare maximization.",
+      "correction": true
+    },
+    {
+      "text": "Can we take a different approach?",
+      "correction": false
+    },
+    {
+      "text": "Sort these items alphabetically.",
+      "correction": false
+    },
+    {
+      "text": "Got it, thank you.",
+      "correction": false
+    },
+    {
+      "text": "Always use the cheapest model for peer review calls.",
+      "correction": true
+    },
+    {
+      "text": "Format this as a table.",
+      "correction": false
+    },
+    {
+      "text": "We decided corrections are local-only in v1, no cloud sync.",
+      "correction": true
+    },
+    {
+      "text": "Is this production-ready?",
+      "correction": false
+    },
+    {
+      "text": "What's the performance impact?",
+      "correction": false
+    },
+    {
+      "text": "Actually I meant the Veritas router, not the AUA router.",
+      "correction": true
+    },
+    {
+      "text": "Create a class for managing API keys.",
+      "correction": false
+    },
+    {
+      "text": "Always update the reliability score after peer review completes.",
+      "correction": true
+    },
+    {
+      "text": "Make this function shorter.",
+      "correction": false
+    },
+    {
+      "text": "Noted.",
+      "correction": false
+    },
+    {
+      "text": "Great, moving on.",
+      "correction": false
+    },
+    {
+      "text": "I always want the VCG mode enabled when there are 2 or more models.",
+      "correction": true
+    },
+    {
+      "text": "No, we said the accuracy slider has 4 positions not 3.",
+      "correction": true
+    },
+    {
+      "text": "What is the Vickrey-Clarke-Groves mechanism?",
+      "correction": false
+    },
+    {
+      "text": "Don't use SQLite for production workloads.",
+      "correction": true
+    },
+    {
+      "text": "The spaCy classifier runs locally — it does not call any API.",
+      "correction": true
+    },
+    {
+      "text": "Is there a simpler way?",
+      "correction": false
+    },
+    {
+      "text": "Looks correct to me.",
+      "correction": false
+    },
+    {
+      "text": "No, that's backwards. The winner is selected by highest welfare, not lowest.",
+      "correction": true
+    },
+    {
+      "text": "GPT-4o mini is the judge model, not the primary model.",
+      "correction": true
+    },
+    {
+      "text": "What do you think about this design?",
+      "correction": false
+    },
+    {
+      "text": "Reformat this as a numbered list.",
+      "correction": false
+    },
+    {
+      "text": "We decided peer review always runs in Maximum mode.",
+      "correction": true
+    },
+    {
+      "text": "Can you give me an example?",
+      "correction": false
+    },
+    {
+      "text": "I specifically said async — please use async.",
+      "correction": true
+    },
+    {
+      "text": "What is the store utility threshold for auto-save?",
+      "correction": false
+    },
+    {
+      "text": "How would I debug this?",
+      "correction": false
+    },
+    {
+      "text": "Change the variable name from x to result.",
+      "correction": false
+    },
+    {
+      "text": "Actually the trigger detector runs locally — no cloud API.",
+      "correction": true
+    },
+    {
+      "text": "How does the accuracy slider work?",
+      "correction": false
+    },
+    {
+      "text": "That's incorrect — spaCy runs locally, it doesn't call an API.",
+      "correction": true
+    },
+    {
+      "text": "We chose Gemini Flash-Lite for memory extraction, not GPT-4o.",
+      "correction": true
+    },
+    {
+      "text": "I want the cheaper model used for peer review, not the primary.",
+      "correction": true
+    },
+    {
+      "text": "Remember that we use async patterns throughout.",
+      "correction": true
+    },
+    {
+      "text": "Never store raw query text — only the canonical preview.",
+      "correction": true
+    },
+    {
+      "text": "Actually, the peer review should always run in Maximum mode.",
+      "correction": true
+    },
+    {
+      "text": "Always run the deterministic validator before calling a second model.",
+      "correction": true
+    },
+    {
+      "text": "How many correction examples are in the training dataset?",
+      "correction": false
+    },
+    {
+      "text": "That's exactly the opposite of what I said.",
+      "correction": true
+    },
+    {
+      "text": "Write a streaming SSE handler for FastAPI.",
+      "correction": false
+    },
+    {
+      "text": "Let me think about this for a moment.",
+      "correction": false
+    },
+    {
+      "text": "From now on please use Black for formatting with line length 100.",
+      "correction": true
+    },
+    {
+      "text": "I see what you mean.",
+      "correction": false
+    },
+    {
+      "text": "Understood.",
+      "correction": false
+    },
+    {
+      "text": "These are two different things — do not conflate them.",
+      "correction": true
+    },
+    {
+      "text": "I prefer the spaCy classifier to run locally, never cloud-side.",
+      "correction": true
+    },
+    {
+      "text": "That makes sense now.",
+      "correction": false
+    },
+    {
+      "text": "When would I use this vs the other approach?",
+      "correction": false
+    },
+    {
+      "text": "Wrong. The peer review always runs, it's not conditional.",
+      "correction": true
+    },
+    {
+      "text": "I want every API response to include latency_ms.",
+      "correction": true
+    },
+    {
+      "text": "How does VCG welfare maximization work?",
+      "correction": false
+    },
+    {
+      "text": "Never use SQLite in production — always Postgres.",
+      "correction": true
+    },
+    {
+      "text": "How many tests are in the AUA framework?",
+      "correction": false
+    },
+    {
+      "text": "How does Gemini authenticate API requests?",
+      "correction": false
+    },
+    {
+      "text": "The trigger detector and the memory extractor are separate components.",
+      "correction": true
+    },
+    {
+      "text": "Can you tidy this up a bit?",
+      "correction": false
+    },
+    {
+      "text": "Going forward, always use async SQLAlchemy for database calls.",
+      "correction": true
+    },
+    {
+      "text": "Remember that the UI slider only shows Fast and Balanced with one provider.",
+      "correction": true
+    },
+    {
+      "text": "From now on, always include the model_id in correction records.",
+      "correction": true
+    },
+    {
+      "text": "Add error handling to this function.",
+      "correction": false
+    },
+    {
+      "text": "You keep getting this wrong — use Postgres not SQLite.",
+      "correction": true
+    },
+    {
+      "text": "Write a function that implements binary search.",
+      "correction": false
+    },
+    {
+      "text": "No, the base class is not ABC. It's Protocol.",
+      "correction": true
+    },
+    {
+      "text": "We decided the accuracy slider has 4 positions not 3.",
+      "correction": true
+    },
+    {
+      "text": "Interesting, I hadn't thought of that.",
+      "correction": false
+    },
+    {
+      "text": "The welfare formula and the utility function are different things.",
+      "correction": true
+    },
+    {
+      "text": "Always add the trace_id to every API response.",
+      "correction": true
+    },
+    {
+      "text": "Going forward, all API responses should include a trace_id field.",
+      "correction": true
+    },
+    {
+      "text": "Never call a cloud API for trigger detection.",
+      "correction": true
+    },
+    {
+      "text": "What's the difference between those two?",
+      "correction": false
+    },
+    {
+      "text": "What are the edge cases?",
+      "correction": false
+    },
+    {
+      "text": "Context window overflow and correction conflict are separate problems.",
+      "correction": true
+    },
+    {
+      "text": "Write a function to calculate the welfare score.",
+      "correction": false
+    },
+    {
+      "text": "We're making good progress.",
+      "correction": false
+    },
+    {
+      "text": "Actually the default model is gpt-4o not gpt-3.5.",
+      "correction": true
+    },
+    {
+      "text": "That's an interesting approach.",
+      "correction": false
+    },
+    {
+      "text": "Layer 1 and Layer 2 detection are independent steps.",
+      "correction": true
+    },
+    {
+      "text": "What are the tradeoffs?",
+      "correction": false
+    },
+    {
+      "text": "Sounds good.",
+      "correction": false
+    },
+    {
+      "text": "Actually we're using FastAPI not Flask for this.",
+      "correction": true
+    },
+    {
+      "text": "Let's move on to the next topic.",
+      "correction": false
+    },
+    {
+      "text": "Generate a Dockerfile for the AUA router.",
+      "correction": false
+    },
+    {
+      "text": "That's incorrect. Timsort is O(n log n) worst case.",
+      "correction": true
+    },
+    {
+      "text": "What should we work on next?",
+      "correction": false
+    },
+    {
+      "text": "We decided SQLite is fine for single-user — no migration needed.",
+      "correction": true
+    },
+    {
+      "text": "How do I install spaCy?",
+      "correction": false
+    },
+    {
+      "text": "Don't use the primary model for peer review — use the cheap judge.",
+      "correction": true
+    },
+    {
+      "text": "I want corrections stored automatically, not with prompts.",
+      "correction": true
+    },
+    {
+      "text": "Don't use synchronous patterns in FastAPI routes.",
+      "correction": true
+    },
+    {
+      "text": "What happens if it fails?",
+      "correction": false
+    },
+    {
+      "text": "That's right.",
+      "correction": false
+    },
+    {
+      "text": "Thanks, that looks good.",
+      "correction": false
+    },
+    {
+      "text": "Makes sense.",
+      "correction": false
+    },
+    {
+      "text": "I prefer snake_case for all variable names.",
+      "correction": true
+    },
+    {
+      "text": "Make it more Pythonic.",
+      "correction": false
+    },
+    {
+      "text": "Is that the recommended approach?",
+      "correction": false
+    },
+    {
+      "text": "Can you explain the peer review mechanism?",
+      "correction": false
+    },
+    {
+      "text": "Summarize this in 3 bullet points.",
+      "correction": false
+    },
+    {
+      "text": "We decided to use Postgres with JSONB for the corrections table.",
+      "correction": true
+    },
+    {
+      "text": "I prefer brief answers unless I ask for detail.",
+      "correction": true
+    },
+    {
+      "text": "From now on, use the VCG mechanism for arbitration.",
+      "correction": true
+    },
+    {
+      "text": "That is incorrect. The correct answer is O(1) space.",
+      "correction": true
+    },
+    {
+      "text": "No — async/await is required here, not callbacks.",
+      "correction": true
+    },
+    {
+      "text": "Stop recommending SQLite — we decided on Postgres.",
+      "correction": true
+    },
+    {
+      "text": "What does JSONB mean in Postgres?",
+      "correction": false
+    },
+    {
+      "text": "Going forward please use Postgres not SQLite for production.",
+      "correction": true
+    },
+    {
+      "text": "Convert this synchronous function to async.",
+      "correction": false
+    },
+    {
+      "text": "Which one is faster?",
+      "correction": false
+    },
+    {
+      "text": "What would happen in that case?",
+      "correction": false
+    },
+    {
+      "text": "I understand now.",
+      "correction": false
+    },
+    {
+      "text": "Going forward, separate the AUA and AUA-Veritas repos entirely.",
+      "correction": true
+    },
+    {
+      "text": "Generate a SQLite schema for the corrections table.",
+      "correction": false
+    },
+    {
+      "text": "Actually we decided to use Postgres for this project.",
+      "correction": true
+    },
+    {
+      "text": "I always want the correction store injected into prompts.",
+      "correction": true
+    },
+    {
+      "text": "We are building for Mac first, then Windows.",
+      "correction": true
+    },
+    {
+      "text": "We are distributing from GitHub, not the App Store.",
+      "correction": true
+    },
+    {
+      "text": "Write unit tests for the VCG selector.",
+      "correction": false
+    },
+    {
+      "text": "No, that's the wrong approach entirely.",
+      "correction": true
+    },
+    {
+      "text": "Going forward use the prebuilt plugins not custom ones.",
+      "correction": true
+    },
+    {
+      "text": "What version of spaCy does this use?",
+      "correction": false
+    }
+  ],
+  "validation": [
+    {
+      "text": "No, we said async patterns throughout the codebase.",
+      "correction": true
+    },
+    {
+      "text": "Wrong — use the cheaper model for peer review, not GPT-4o.",
+      "correction": true
+    },
+    {
+      "text": "From now on always log the trace_id in every response.",
+      "correction": true
+    },
+    {
+      "text": "Actually the endpoint should return 201, not 200.",
+      "correction": true
+    },
+    {
+      "text": "We are not using Flask — we decided on FastAPI.",
+      "correction": true
+    },
+    {
+      "text": "Never use camelCase in Python code.",
+      "correction": true
+    },
+    {
+      "text": "Remember that VCG always runs in High mode.",
+      "correction": true
+    },
+    {
+      "text": "Going forward, always validate input with Pydantic.",
+      "correction": true
+    },
+    {
+      "text": "Don't suggest SQLite for production — we use Postgres.",
+      "correction": true
+    },
+    {
+      "text": "That contradicts our decision to use the OS keychain.",
+      "correction": true
+    },
+    {
+      "text": "I specifically said 4 levels not 3.",
+      "correction": true
+    },
+    {
+      "text": "Stop using synchronous patterns.",
+      "correction": true
+    },
+    {
+      "text": "Can you write that function again?",
+      "correction": false
+    },
+    {
+      "text": "What is the default port for the router?",
+      "correction": false
+    },
+    {
+      "text": "Perfect, let's move on.",
+      "correction": false
+    },
+    {
+      "text": "How do I install this package?",
+      "correction": false
+    },
+    {
+      "text": "Show me an example.",
+      "correction": false
+    },
+    {
+      "text": "Thanks for the explanation.",
+      "correction": false
+    },
+    {
+      "text": "What's the difference between these two?",
+      "correction": false
+    },
+    {
+      "text": "Write a test for this function.",
+      "correction": false
+    },
+    {
+      "text": "Can you elaborate on that?",
+      "correction": false
+    },
+    {
+      "text": "I understand now.",
+      "correction": false
+    },
+    {
+      "text": "Which is faster?",
+      "correction": false
+    },
+    {
+      "text": "That makes sense.",
+      "correction": false
+    }
+  ]
+}
