@@ -18,12 +18,12 @@ You get a more truthful answer than any single model gives directly.
 
 ## Accuracy levels
 
-| Level | What happens | Relative cost |
-|---|---|---|
-| **Fast** | One best model answers. Past corrections injected. | $ |
-| **Balanced** | Two models answer. Best selected by welfare score. | $$ |
-| **High** | All selected models answer. VCG picks the best. | $$$ |
-| **Maximum** | All models answer. Other models peer-review the winner. | $$$$ |
+| Level | What happens | Cost vs direct | Time vs direct |
+|---|---|---|---|
+| **Fast** | One best model answers. Corrections injected. Local validator runs. | `1x` — identical | +1–2% |
+| **Balanced** | Primary answers. Cheap judge model cross-checks factual queries + failures. | `1x–1.1x` (~1.05x avg) | +12% avg |
+| **High** | All selected models answer in parallel. VCG picks the best. | `Nx` (N = models) | +5–15% (parallel) |
+| **Maximum** | All models answer. Other models peer-review the winner (cheap judges). | `~N + 0.1×(N-1)x` e.g. 3.2x for 3 models | +50–70% |
 
 Peer review uses the cheapest available model (GPT-4o mini or Claude Haiku) — not the primary model.
 

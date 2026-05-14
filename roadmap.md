@@ -1006,9 +1006,13 @@ Welcome to AUA-Veritas
 
 Connect your AI models. Your keys are stored on this device only.
 
-  ChatGPT (OpenAI)     [sk-proj-•••••••••]  ✓ Connected
-  Claude (Anthropic)   [sk-ant-•••••••••]  ✓ Connected
-  Gemini (Google)      [________________________]  + Connect
+  ChatGPT (OpenAI)     [sk-proj-•••••••••]  ✓ Connected   [?]
+  Claude (Anthropic)   [sk-ant-•••••••••]  ✓ Connected   [?]
+  Gemini (Google)      [________________________]  + Connect [?]
+  Grok (xAI)           [________________________]  + Connect [?]
+  Mistral              [________________________]  + Connect [?]
+  DeepSeek             [________________________]  + Connect [?]
+  Llama via Groq       [________________________]  + Connect [?]
 
   What would you like to call your first project?
   [My Project ____________]
@@ -1016,7 +1020,47 @@ Connect your AI models. Your keys are stored on this device only.
   [Start chatting →]
 ```
 
-Then a chat window opens. That's it.
+**`[?]` button behaviour — opens a step-by-step modal for that provider:**
+
+```
+┌─ How to get your OpenAI API key ─────────────────────────────────────┐
+│                                                                      │
+│  1. Go to  platform.openai.com/api-keys                             │
+│             [Open in browser ↗]                                      │
+│                                                                      │
+│  2. Sign in or create a free account                                 │
+│                                                                      │
+│  3. Click  + Create new secret key                                  │
+│                                                                      │
+│  4. Give it a name (e.g. "AUA-Veritas") and click Create            │
+│                                                                      │
+│  5. Copy the key — it starts with  sk-proj-                         │
+│     You won't be able to see it again after closing this dialog.    │
+│                                                                      │
+│  6. Paste it into the AUA-Veritas field and click Connect           │
+│                                                                      │
+│  ⚠  Your key is stored in your Mac Keychain — never in the cloud.  │
+│                                                                      │
+│                                              [Got it — close]       │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+**Per-provider API key URLs and key format:**
+
+| Provider | URL | Key format | Free tier |
+|---|---|---|---|
+| OpenAI | platform.openai.com/api-keys | `sk-proj-...` | No — pay-as-you-go |
+| Anthropic | console.anthropic.com/settings/keys | `sk-ant-...` | No — pay-as-you-go |
+| Google | aistudio.google.com/app/apikey | `AIza...` | Yes — free quota available |
+| xAI (Grok) | console.x.ai/api-keys | `xai-...` | Limited free tier |
+| Mistral | console.mistral.ai/api-keys | `...` | Limited free tier |
+| DeepSeek | platform.deepseek.com/api_keys | `sk-...` | Pay-as-you-go, very cheap |
+| Groq (Llama) | console.groq.com/keys | `gsk_...` | Yes — generous free tier |
+
+**Note on free tiers:** Google Gemini and Groq (Llama) both have free tiers with enough
+quota for typical daily usage. Good starting point for users who want to try the app
+without spending anything. Note shown in the `[?]` modal where applicable:
+*"Gemini has a free tier — no payment needed to get started."*
 
 ---
 
