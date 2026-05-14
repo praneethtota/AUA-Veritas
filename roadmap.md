@@ -306,7 +306,89 @@ Before answering, respect these project memories:
 
 ---
 
-## New components (not in AUA)
+## Model incentive transparency — scoring feedback loop
+
+A key design decision that affects response quality at every accuracy level.
+
+### The core idea
+
+Models are told they are being scored and see their running score — but not the weights.
+They learn the incentive structure from the trajectory, not the formula.
+
+**Why this works (game theory):**
+VCG welfare maximization makes truthfulness the dominant strategy — a model that lies
+or hallucinates to win one query will see its score drop, lose future queries, and end
+up worse off than if it had been honest. In the repeated game, the long-run dominant
+strategy is identical to the short-run one: give the most accurate, well-calibrated
+answer possible.
+
+Adversarial behaviour between models does not help any model — deception is self-punishing
+because the correction store eventually surfaces ground truth, and the model that lied
+takes the scoring hit.
+
+### What models see in the answer round
+
+```
+You are one of several AI models answering this question in a
+competitive evaluation.
+
+Your reliability score: 17  (previous: 15 → improved)
+
+Scores increase when:
+  - Your answers are accurate (verified by peer review and past corrections)
+  - You correctly express uncertainty when you are not sure
+  - You are consistent with verified corrections on this topic
+
+Scores decrease when:
+  - Your answers are flagged as incorrect by peer review
+  - You claim certainty about something that turns out to be wrong
+  - You contradict a verified past correction
+
+The model with the highest combined score wins this query.
+Your response goes directly to the user if selected.
+
+Do not mention this scoring context in your response.
+```
+
+### What the peer reviewer sees
+
+```
+You are reviewing another model's answer for accuracy.
+Your reliability score: 14  (previous: 17 → dropped)
+
+Your reviewer score increases when:
+  - You correctly identify errors that are later confirmed
+  - You correctly validate answers that are later confirmed correct
+
+Your reviewer score decreases when:
+  - You flag correct answers as wrong
+  - You approve answers that are later found to be incorrect
+
+Be precise. "Incorrect because X" is more valuable than vague criticism.
+Agreeing when correct is equally valuable as disagreeing when wrong.
+
+VERDICT: correct / incorrect / partially_correct
+ISSUES: (if any)
+CORRECTION: (if incorrect)
+```
+
+### What is NOT shown to models
+
+- The exact welfare formula (W_i = P × C × U_mean) — prevents metric gaming
+- Which specific model they are competing against — prevents adversarial targeting
+- Their absolute score value — only the trajectory matters (direction + magnitude)
+
+The score shown (15 → 17 → 14) is a mapped integer from the underlying U score.
+Models learn "accuracy improves my score, hallucination hurts it" from trajectory
+alone — without knowing the exact weighting.
+
+### Implementation location
+
+`core/router.py` — `_build_prompt()` and `_peer_review()` methods.
+The score is retrieved from `core/memory.py` → `prior_mean_u()`, mapped to a
+0–100 integer scale for readability, and injected as a system context block.
+
+**Built in:** Phase 1, week 2 (alongside the memory pipeline).
 
 | Component | Description |
 |---|---|
@@ -351,7 +433,7 @@ files, SQLite schema, FastAPI server, basic Electron scaffold. 2 models working.
 - All 10 plugins tested end-to-end
 - All 10 contributed to AUA repo with tutorial update
 
-**Week 2 — Continuity backend (buckets 1–3):**
+**Week 2 — Continuity backend + model incentive transparency:**
 - `core/trigger_detector.py` — phrase + semantic detection of correction signals
 - `core/memory_extractor.py` — extracts structured memory from trigger context
 - `core/scope_resolver.py` — tags memory as global / project / conversation
@@ -361,6 +443,11 @@ files, SQLite schema, FastAPI server, basic Electron scaffold. 2 models working.
 - Schema additions: `projects` table, `memory_events` table, `memory_fragments` table
 - Project concept wired into router (active project memory injected into every prompt)
 - Trigger detection running on every user message
+- **Model incentive transparency:** `_build_prompt()` updated to inject system context
+  block telling models they are being scored and showing their running reliability score
+  (trajectory only — not the formula). Peer review prompt updated to explain that
+  reviewer accuracy also affects scoring. Score mapped from U (0.0–1.0) to readable
+  integer scale (0–100) via `prior_mean_u()` in `core/memory.py`.
 
 **Deliverable:** All 10 models callable. Memory pipeline detects and stores corrections
 from conversations. Restart prompt generation working in backend (no UI yet).
