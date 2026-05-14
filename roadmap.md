@@ -90,34 +90,146 @@ Completed plugins contributed back to AUA repo as prebuilt plugins, documented i
 ## Accuracy levels
 
 Single slider in the left panel. Four positions. Plain-language labels only.
-
-### Fast
-- Route to one model based on query type
-- Inject correction store and active project memory into prompt
-- Deterministic validation (AST check for code, consistency check against corrections)
-- **API calls:** 1 · **Cost:** Lowest
-
-### Balanced
-- Two models answer in parallel
-- VCG welfare maximization selects the better response
-- **API calls:** 2 · **Cost:** Low
-
-### High
-- All user-selected models answer in parallel
-- VCG selects the best response by W_i = P(domain) × confidence × prior_mean_U
-- **API calls:** N · **Cost:** Medium
-
-### Maximum
-- **Round 1:** All selected models answer in parallel
-- VCG selects provisional winner
-- **Round 2 — Peer review:** Other models review the winner using cheapest judge model
-- **API calls:** N + (N-1)×2 · **Cost:** Higher — live estimate shown
-
-**Live cost estimate:** Left panel shows estimated calls and USD cost per message.
-
-**High-stakes domains:** Medical, legal, finance always get an amber callout regardless of accuracy level.
+All costs expressed as a multiplier of what you would pay using the model directly without the app.
 
 ---
+
+### Fast
+*Suggested use: speed is the priority, or the query is low-stakes*
+
+**Mechanism:**
+- App picks the best model for the query type via a simple rule-based classifier
+  (code → GPT-4o or Claude · factual/recent events → Gemini · general → user's default)
+- Correction store and active project memory injected into the prompt before the call
+- Model told its running reliability score (e.g. "Your score: 72 → up from 65")
+- AUA deterministic validator runs on the response locally (AST check for code,
+  math verification for calculations, consistency check against correction store)
+  - If it passes → subtle "Checked ✓" callout · model score updated upward
+  - If it fails → amber callout shown · model score updated downward · no retry in Fast mode
+
+**Cost:** `1x` — identical to calling the model directly. No extra API calls.
+**Time penalty:** +1–2% — the local deterministic check adds <50ms. Negligible.
+
+---
+
+### Balanced
+*Suggested use: recommended default — meaningful correctness improvement for a small price increase*
+
+**Mechanism — two sub-cases:**
+
+**Sub-case A (most queries — deterministic check passes):**
+- Primary model answers
+- Local AUA validator runs (AST / math / correction store consistency)
+- If it passes → "Checked ✓" callout, no second model needed
+- Model score updated · no extra API call
+
+**Sub-case B (factual queries always + any query where Sub-case A fails):**
+- A cheap judge model (GPT-4o mini or Claude Haiku) is called with:
+  *"Here is a question and an answer from another AI. Is this correct? If not, what's wrong?"*
+- If the judge agrees → "Cross-checked ✓" · primary model score up · judge score up
+- If the judge disagrees → judge's correction wins · primary model score down ·
+  correction stored for future queries
+- The judge model is ~10x cheaper than the primary model
+
+**Why Sub-case B triggers ~45% of the time:**
+Factual queries (≈40% of typical usage) always trigger a cross-check regardless of
+whether Sub-case A passes — factual accuracy can't be verified by an AST check.
+Non-factual queries trigger Sub-case B only when the validator finds an issue (~5% of those).
+Result: Sub-case B fires on approximately 45% of Balanced queries.
+
+**Cost:** `1x to ~1.1x`
+- When Sub-case B does not trigger: `1x` — same as direct
+- When Sub-case B triggers: `~1.1x` — the judge call costs ~1/10th of the primary call
+- Typical blended cost across a mixed query session: `~1.05x`
+- Worst case (all factual queries): `~1.10x`
+- The "1.1x" shown in the UI is a conservative estimate that covers most users
+
+**Hallucination context (Vectara 2025/2026 benchmarks):**
+Frontier models hallucinate ~1.5–6% of the time on typical queries (GPT-4o ~1.5%,
+Claude Sonnet ~4–10%, Gemini Flash ~0.7–3%). Balanced catches the majority of these
+errors via the judge model at a fraction of the cost of calling the full primary model twice.
+
+**Time penalty:** `+1–2%` when Sub-case A (no second call) · `+25–30%` when Sub-case B
+triggers (sequential judge call ~0.8s added to primary ~3s) · **`~+12% average`** across
+a typical session.
+
+---
+
+### High
+*Suggested use: cross-domain queries, high-value decisions, when you want the best of several models*
+
+**Mechanism:**
+- All user-selected models answer in parallel (simultaneous API calls)
+- VCG welfare maximization selects the winner: W_i = P(domain) × confidence × prior_mean_U
+- If 3+ models: majority vote handles exact ties before VCG
+- Arbiter still runs contradiction detection on losing responses to store corrections —
+  but does not override the VCG winner
+- All model scores updated based on results
+
+**Cost:** `Nx` where N = number of models you have enabled
+- 2 models enabled: `2x` · 3 models: `3x` · 5 models: `5x`
+- Expressed in the UI as: *"3 API calls at your model rates"*
+
+**Time penalty:** `+5–15%` vs a single model call — because all N calls run in parallel,
+total latency ≈ slowest model response + ~100ms VCG computation overhead.
+This is **not** N times slower. Parallel execution means the time cost is minimal.
+
+---
+
+### Maximum
+*Suggested use: high-stakes queries where being wrong has real consequences — medical,
+legal, financial decisions, critical code, anything you'd normally verify manually*
+
+**Mechanism:**
+- **Round 1 (answer):** All selected models answer in parallel — same as High
+- VCG selects provisional winner
+- **Round 2 (peer review — runs on EVERY response, not just contradictions):**
+  The (N-1) non-winning models each review the winner's answer using the cheapest
+  available judge (GPT-4o mini or Claude Haiku — NOT the full primary model again)
+  - Structured prompt: verdict (correct / incorrect / partially_correct) + issues + correction
+  - All review calls run in parallel
+  - If reviewers agree → "Peer-reviewed ✓ · High confidence"
+  - If reviewers disagree → disagreement flagged to user · correction stored
+- All model scores updated (answer quality AND reviewer accuracy)
+
+**Why Round 2 always runs (not conditional on contradictions):**
+Maximum means unconditional peer review. If Round 2 only triggered on contradictions,
+it would be indistinguishable from Balanced on clean responses — defeating the purpose
+of the mode. The user selects Maximum precisely because they want every response verified.
+
+**Cost:** `N + (N-1) × ~0.1x` — NOT `N + (N-1) × 2x`
+The review calls use cheap judge models (~1/10th the cost of the primary).
+The formula N+(N-1)×2 counts API *calls*, not cost.
+
+| Models enabled | API calls | Actual cost multiplier |
+|---|---|---|
+| 2 | 3 | ~2.1x |
+| 3 | 5 | ~3.2x |
+| 5 | 9 | ~5.4x |
+
+Example: 3 models selected, primary model costs $0.01/query
+- Round 1: 3 × $0.010 = $0.030
+- Round 2: 2 × $0.001 = $0.002  (mini models)
+- Total: $0.032 = **3.2x**, not 7x
+
+The live cost estimate in the UI uses this formula — not the call count multiplier.
+
+**Time penalty:** `+50–70%` vs single model call
+- Round 1 (parallel): ~3–4s (slowest model)
+- Round 2 (parallel cheap models): ~0.8–1s
+- Total: ~4–5s vs ~3s for a single model call
+
+---
+
+**Live cost estimate:** Left panel shows estimated calls and USD cost per message,
+updating as user changes accuracy level and checks/unchecks models.
+Example: *"~5 API calls · est. $0.032 per message"*
+
+**High-stakes domains:** Medical, legal, finance always get an amber callout regardless
+of accuracy level.
+
+---
+
 
 ## Integrated Continuity features (buckets 1–3)
 
