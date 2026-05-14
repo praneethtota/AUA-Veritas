@@ -236,7 +236,78 @@ of accuracy level.
 These features are integrated into Veritas, not a separate app. They apply to conversations
 happening through Veritas only.
 
-### What gets detected and stored
+### Trigger detector — implementation decision
+
+The trigger detector answers one binary question per user message:
+**"Is this a correction signal?"** — nothing more. Extraction, scoping,
+and store utility scoring all happen downstream, after the trigger fires.
+
+**Two-layer local architecture — no cloud API call on every message:**
+
+```
+Every user message
+        │
+        ▼
+Layer 1: Regex / keyword match  (pure Python, <1ms, zero cost)
+        │
+        ├── Clear match  → trigger = True  → go to memory extractor
+        ├── Clear miss   → trigger = False → skip (most messages)
+        └── Ambiguous    → go to Layer 2
+        │
+        ▼
+Layer 2: spaCy text classifier  (bundled, <10ms, zero cost)
+  (catches semantic corrections with no trigger keywords)
+        │
+        ├── trigger = True  → go to memory extractor
+        └── trigger = False → skip
+        │
+        ▼
+Memory extractor  (fires only ~5–10% of messages)
+        │
+        └── HERE is where Gemini Flash-Lite (or GPT-4o mini fallback)
+            is called — structured extraction on a short text snippet.
+            Input: query + user correction message
+            Output: {type, scope, canonical_form, corrected_claim}
+```
+
+**Layer 1 — keyword patterns (examples):**
+```
+"no,", "wrong", "incorrect", "that's not right", "actually",
+"going forward", "always ", "never ", "from now on", "remember",
+"it should be", "use X instead", "the correct answer", "you said",
+"that was wrong", "don't do that", "avoid", "we decided"
+```
+
+**Layer 2 — spaCy text classifier:**
+- spaCy is already a dependency (used by `field_classifier.py`)
+- Model size: ~15MB additional bundle size
+- Latency: <10ms on CPU
+- Catches semantic corrections with no trigger keyword:
+  *"We are not merging these two concepts. They are separate."*
+- Fine-tuned on a correction-signal dataset during development
+
+**Memory extractor — why Gemini Flash-Lite:**
+- Gemini 2.0 Flash recorded the lowest hallucination rate at 0.7%
+  on Vectara benchmarks — lowest of any model tested
+- Cheaper than GPT-4o mini for the same structured extraction task
+- Fires only when trigger detector confirms a correction (~5–10% of messages)
+- Falls back to GPT-4o mini if user has no Google API key connected
+
+**Why NOT a cloud LLM for the trigger detector:**
+Calling a cloud API on every user message to decide if it is a correction
+would: (a) add 200–500ms latency before every query, (b) call a second
+cloud service in Fast mode where the user expects only one API call, and
+(c) raise a privacy concern — every message leaves the device even when
+nothing is being stored. The two-layer local approach is invisible to the
+user and fully private.
+
+**App bundle impact:**
+
+| Component | Size | Latency | Cost |
+|---|---|---|---|
+| Regex (Layer 1) | 0 MB | <1ms | $0 |
+| spaCy classifier (Layer 2) | ~15 MB | <10ms | $0 |
+| Gemini Flash-Lite (extractor) | 0 MB (cloud) | +200ms when triggered | ~$0.0001/correction |
 
 The memory pipeline watches for durable signals in the conversation stream:
 
@@ -546,7 +617,7 @@ files, SQLite schema, FastAPI server, basic Electron scaffold. 2 models working.
 - All 10 contributed to AUA repo with tutorial update
 
 **Week 2 — Continuity backend + model incentive transparency:**
-- `core/trigger_detector.py` — phrase + semantic detection of correction signals
+- `core/trigger_detector.py` — two-layer local detection (see implementation note below)
 - `core/memory_extractor.py` — extracts structured memory from trigger context
 - `core/scope_resolver.py` — tags memory as global / project / conversation
 - `core/store_utility.py` — scores whether candidate memory should be saved
