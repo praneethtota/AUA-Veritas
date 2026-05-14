@@ -1,11 +1,17 @@
 """
 core/plugins/google_backend.py — Google Gemini backend plugin.
-Uses Google GenAI SDK (NOT OpenAI-compatible — different auth + request format).
-Status: Phase 1 — full implementation.
-To contribute back to AUA: copy to aua/plugins/prebuilt/google_backend.py
+
+Covers: gemini-1.5-pro, gemini-2.0-flash
+Uses Google Generative Language REST API directly (no SDK dependency).
+NOT OpenAI-compatible — different auth (API key as query param), different
+request/response format.
+
+To contribute back to AUA:
+  copy to aua/plugins/prebuilt/google_backend.py
 """
 from __future__ import annotations
 
+import json
 import logging
 import time
 from collections.abc import AsyncIterator
@@ -19,8 +25,10 @@ GOOGLE_BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
 class GoogleBackend:
     """
-    Google Gemini backend. Uses the Google Generative Language API.
-    NOT OpenAI-compatible — uses a different endpoint and auth pattern.
+    Google Gemini backend. Uses the Google Generative Language REST API.
+
+    Auth: API key passed as query parameter (not Authorization header).
+    Endpoint pattern: /v1beta/models/{model}:generateContent?key={api_key}
 
     Args:
         model_id: e.g. "gemini-1.5-pro" or "gemini-2.0-flash"
@@ -32,68 +40,147 @@ class GoogleBackend:
         self._api_key = api_key
         self._client = httpx.AsyncClient(timeout=60.0)
 
-    def _endpoint(self, method: str) -> str:
-        model = self.model_id.replace(".", "-")
-        return f"{GOOGLE_BASE_URL}/models/{model}:{method}?key={self._api_key}"
+    # ── URL helpers ───────────────────────────────────────────────────────────
 
-    def _to_google_request(self, request: dict) -> dict:
-        """Convert OpenAI-compatible request to Google format."""
+    def _url(self, method: str) -> str:
+        """Build the full endpoint URL for a given method."""
+        # Gemini model IDs use hyphens; the API accepts them directly
+        return f"{GOOGLE_BASE_URL}/models/{self.model_id}:{method}?key={self._api_key}"
+
+    # ── Request/response conversion ───────────────────────────────────────────
+
+    @staticmethod
+    def _to_google(request: dict) -> dict:
+        """
+        Convert OpenAI-compatible request dict to Google format.
+
+        OpenAI: {"messages": [{"role": "user", "content": "..."}], "max_tokens": N}
+        Google: {"contents": [{"role": "user", "parts": [{"text": "..."}]}],
+                 "generationConfig": {"maxOutputTokens": N}}
+        """
         messages = request.get("messages", [])
         contents = []
-        for m in messages:
-            role = "user" if m["role"] in ("user", "system") else "model"
-            contents.append({"role": role, "parts": [{"text": m["content"]}]})
-        return {
-            "contents": contents,
-            "generationConfig": {
-                "temperature": request.get("temperature", 0.2),
-                "maxOutputTokens": request.get("max_tokens", 2048),
-            },
-        }
+        system_text = None
 
-    def _from_google_response(self, response: dict) -> dict:
-        """Convert Google response to OpenAI-compatible format."""
+        for m in messages:
+            role = m["role"]
+            content = m["content"]
+            if role == "system":
+                # Google doesn't have a system role — prepend to first user message
+                system_text = content
+                continue
+            # Google uses "model" not "assistant"
+            g_role = "model" if role == "assistant" else "user"
+            contents.append({"role": g_role, "parts": [{"text": content}]})
+
+        # Prepend system text to first user turn if present
+        if system_text and contents:
+            first_user = contents[0]
+            first_user["parts"] = [{"text": system_text + "\n\n" + first_user["parts"][0]["text"]}]
+
+        payload: dict = {"contents": contents}
+        gen_config: dict = {}
+
+        if "max_tokens" in request:
+            gen_config["maxOutputTokens"] = request["max_tokens"]
+        if "temperature" in request:
+            gen_config["temperature"] = request["temperature"]
+
+        if gen_config:
+            payload["generationConfig"] = gen_config
+
+        return payload
+
+    @staticmethod
+    def _from_google(response: dict) -> dict:
+        """
+        Convert Google response to OpenAI-compatible format.
+
+        Google:
+          {"candidates": [{"content": {"parts": [{"text": "..."}]}}]}
+        OpenAI:
+          {"choices": [{"message": {"role": "assistant", "content": "..."}}]}
+        """
         try:
             text = response["candidates"][0]["content"]["parts"][0]["text"]
         except (KeyError, IndexError):
-            text = ""
+            # Handle safety-blocked or empty responses
+            finish_reason = "unknown"
+            try:
+                finish_reason = response["candidates"][0].get("finishReason", "unknown")
+            except (KeyError, IndexError):
+                pass
+            if finish_reason == "SAFETY":
+                text = "[Response blocked by Google safety filters]"
+            else:
+                text = ""
         return {
             "choices": [{"message": {"role": "assistant", "content": text}}],
-            "model": self.model_id,
+            "model": response.get("modelVersion", ""),
         }
 
+    # ── Public interface (OpenAI-compatible) ──────────────────────────────────
+
     async def complete(self, request: dict) -> dict:
-        payload = self._to_google_request(request)
+        """
+        Non-streaming completion.
+
+        Args:
+            request: OpenAI-compatible dict (model, messages, temperature, max_tokens).
+                     The 'model' key is ignored — self.model_id is always used.
+
+        Returns:
+            OpenAI-compatible response dict. Caller reads:
+                result["choices"][0]["message"]["content"]
+        """
+        payload = self._to_google(request)
         try:
             r = await self._client.post(
-                self._endpoint("generateContent"),
+                self._url("generateContent"),
                 json=payload,
                 headers={"Content-Type": "application/json"},
             )
             r.raise_for_status()
-            return self._from_google_response(r.json())
+            return self._from_google(r.json())
         except httpx.HTTPStatusError as e:
-            log.error("Google API error %d: %s", e.response.status_code, e.response.text[:200])
+            status = e.response.status_code
+            body = e.response.text[:300]
+            log.error("Google API error %d: %s", status, body)
+            if status == 400:
+                raise ValueError(f"Google API bad request: {body}") from e
+            if status == 403:
+                raise PermissionError("Google API key invalid or quota exceeded") from e
             raise
 
     async def stream(self, request: dict) -> AsyncIterator[str]:
-        """Streaming completion via Google SSE."""
-        import json
-        payload = self._to_google_request(request)
+        """
+        Streaming completion via Google Server-Sent Events.
+
+        Yields token strings as they arrive. Google wraps SSE in a JSON array
+        — each frame is a complete generateContent response chunk.
+
+        Args:
+            request: Same shape as complete().
+
+        Yields:
+            str — individual text chunks.
+        """
+        payload = self._to_google(request)
         async with self._client.stream(
             "POST",
-            self._endpoint("streamGenerateContent"),
+            self._url("streamGenerateContent") + "&alt=sse",
             json=payload,
             headers={"Content-Type": "application/json"},
         ) as r:
             r.raise_for_status()
             async for line in r.aiter_lines():
-                if not line.strip() or line.strip() == "[":
+                line = line.strip()
+                if not line or not line.startswith("data: "):
+                    continue
+                data = line[6:]  # strip "data: "
+                if data in ("[DONE]", ""):
                     continue
                 try:
-                    data = line.lstrip(",").strip()
-                    if data in ("[", "]"):
-                        continue
                     chunk = json.loads(data)
                     text = chunk["candidates"][0]["content"]["parts"][0]["text"]
                     if text:
@@ -102,6 +189,13 @@ class GoogleBackend:
                     continue
 
     async def health(self) -> dict:
+        """
+        Health check — sends a minimal request to verify the API key works.
+
+        Returns:
+            {"status": "ok", "model": "...", "latency_ms": N}
+            {"status": "error", "error": "...", "latency_ms": N}
+        """
         t0 = time.time()
         try:
             payload = {
@@ -109,16 +203,37 @@ class GoogleBackend:
                 "generationConfig": {"maxOutputTokens": 5},
             }
             r = await self._client.post(
-                self._endpoint("generateContent"),
+                self._url("generateContent"),
                 json=payload,
                 headers={"Content-Type": "application/json"},
             )
             r.raise_for_status()
-            return {"status": "ok", "model": self.model_id,
-                    "latency_ms": round((time.time() - t0) * 1000, 1)}
+            return {
+                "status": "ok",
+                "model": self.model_id,
+                "latency_ms": round((time.time() - t0) * 1000, 1),
+            }
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            if status == 400:
+                error = "Invalid request — check model ID"
+            elif status == 403:
+                error = "Invalid API key or quota exceeded"
+            elif status == 404:
+                error = f"Model {self.model_id!r} not found"
+            else:
+                error = f"HTTP {status}"
+            return {
+                "status": "error",
+                "error": error,
+                "latency_ms": round((time.time() - t0) * 1000, 1),
+            }
         except Exception as e:
-            return {"status": "error", "error": str(e),
-                    "latency_ms": round((time.time() - t0) * 1000, 1)}
+            return {
+                "status": "error",
+                "error": str(e),
+                "latency_ms": round((time.time() - t0) * 1000, 1),
+            }
 
     async def aclose(self) -> None:
         await self._client.aclose()
