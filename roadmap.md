@@ -653,7 +653,16 @@ from conversations. Restart prompt generation working in backend (no UI yet).
 - Right panel: Memory tab (view, pin, edit, delete stored memories per project)
 - Passive save cards in chat panel (Save / Edit / Skip)
 - Auto-save toast (high-confidence memories)
-- Restart prompt modal (generate, copy, edit)
+- Restart prompt modal (generate, copy, edit) with **"Copy for IDE" button**
+  that formats the memory as a Claude Code / Cursor system prompt block:
+  ```
+  Before answering, respect these project decisions:
+  1. Use Postgres + JSONB — not SQLite.
+  2. Always add type hints to Python code.
+  3. Async FastAPI patterns only.
+  ```
+  Paste directly into any AI IDE tool's system prompt or context window.
+  Zero new engineering — same restart_prompt.py output, different button label.
 - Project creation and switching in left panel
 - Memory amber callout in chat: "Applied a past correction"
 - High-stakes domain callout (medical, legal, finance)
@@ -803,6 +812,75 @@ to your device and never shared.
 - Memory export / import (move project memory between machines)
 - Semantic memory retrieval via embedding similarity (upgrade from keyword matching)
 - Mobile consideration (much later, different scope)
+- **`GET /context/active` endpoint — IDE integration layer**
+  Exposes active project memory as a formatted prompt block. VS Code, Cursor,
+  or any IDE extension can call `http://localhost:47821/context/active` before
+  each AI request and prepend the returned block. Veritas does not intercept
+  IDE traffic — the IDE just fetches memory context. No changes to the core
+  architecture, just a new read-only endpoint.
+  ```
+  GET http://localhost:47821/context/active
+  → {
+      "project": "My App",
+      "context_block": "Before answering:\n1. Use Postgres...\n2. Add type hints...",
+      "memory_count": 4,
+      "last_updated": 1747000000
+    }
+  ```
+  A companion VS Code/Cursor plugin (thin, open source) reads this on each
+  AI request. Full API proxy (intercepting IDE traffic) remains in
+  AUA Continuity scope — separate product.
+
+---
+
+## Correction event record — canonical schema
+
+Every correction event writes two records:
+
+**1. `corrections` table (the verified fact — used for prompt injection):**
+```json
+{
+  "correction_id": "uuid",
+  "model_id": "gpt-4o",
+  "score_delta": -10,
+  "reason": "Recommended SQLite after user specified Postgres for production.",
+  "corrective_instruction": "For this project, use Postgres + JSONB, not SQLite.",
+  "scope": "project",
+  "domain": "software_engineering",
+  "canonical_query": "what_database_should_i_use",
+  "query_preview": "What database should I use for...",
+  "confidence": 0.9,
+  "decay_class": "A",
+  "created_at": 1747000000
+}
+```
+
+**2. `audit_log` table (the scoring event — used for "Look Under the Hood" graph):**
+```json
+{
+  "audit_id": "uuid",
+  "model_id": "gpt-4o",
+  "event_type": "correction_stored",
+  "score_before": 72,
+  "score_after": 62,
+  "verdict": "incorrect",
+  "correction_stored": true,
+  "query_preview": "What database should I use for...",
+  "created_at": 1747000000
+}
+```
+
+**How the stored JSON flows downstream:**
+- `score_delta` → applied to model's reliability score → shown in next system context block
+- `reason` → becomes "what caused your score to drop" in the model's system prompt
+- `corrective_instruction` → injected into future prompt bodies for queries on this topic
+- `query_preview` → shown in "Look Under the Hood" clickable point event card
+- `score_before` / `score_after` → plotted on the time-series reliability graph
+
+**What is NOT stored:**
+- Raw query text — only `query_preview` (first 60 chars of canonical form)
+- Full conversation transcript
+- User's personal information
 
 ---
 
