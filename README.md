@@ -64,5 +64,4 @@ pytest
 
 ## Roadmap
 
-See [docs/AUA-Veritas-roadmap.md](https://github.com/praneethtota/Adaptive-Utility-Agent/blob/main/docs/AUA-Veritas-roadmap.md)
-in the AUA repo for the full product roadmap.
+See roadmap.md  for the full product roadmap.
