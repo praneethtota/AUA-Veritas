@@ -9,8 +9,11 @@
     "ui:dev": "cd ui && npm run dev",
     "ui:build": "cd ui && npm run build",
     "api": "uvicorn api.main:app --port 47821 --reload",
-    "build": "npm run ui:build && electron-builder",
-    "pack": "electron-builder --dir"
+    "build:backend": "pyinstaller build/veritas-backend.spec --distpath dist-backend --workpath build/pyinstaller-work --noconfirm",
+    "build:ui": "npm run ui:build",
+    "build:mac": "npm run build:ui && electron-builder --mac --config electron-builder.json",
+    "build:win": "npm run build:ui && electron-builder --win --config electron-builder.json",
+    "pack": "electron-builder --dir --config electron-builder.json"
   },
   "keywords": ["ai", "assistant", "verification", "vcg"],
   "license": "GPL-3.0",

@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AUA-Veritas — AI assistant with cross-model verification</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #fafaf8; color: #1a1a1a;
+    -webkit-font-smoothing: antialiased;
+  }
+  .hero {
+    max-width: 720px; margin: 0 auto;
+    padding: 80px 24px 60px;
+    text-align: center;
+  }
+  .badge {
+    display: inline-block; padding: 4px 12px;
+    background: #ede9fe; color: #5b21b6;
+    border-radius: 20px; font-size: 12px; font-weight: 600;
+    letter-spacing: 0.04em; margin-bottom: 20px;
+  }
+  h1 {
+    font-size: clamp(32px, 6vw, 52px);
+    font-weight: 800; color: #111827;
+    letter-spacing: -0.03em; line-height: 1.1;
+    margin-bottom: 16px;
+  }
+  .tagline {
+    font-size: 18px; color: #6b7280; line-height: 1.6;
+    max-width: 520px; margin: 0 auto 36px;
+  }
+  .download-section { margin-bottom: 16px; }
+  .btn-primary {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 14px 28px; background: #4338ca; color: #fff;
+    border-radius: 12px; text-decoration: none;
+    font-size: 16px; font-weight: 700;
+    transition: background 0.2s; border: none; cursor: pointer;
+  }
+  .btn-primary:hover { background: #3730a3; }
+  .btn-secondary {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 20px; color: #6b7280;
+    border-radius: 8px; text-decoration: none;
+    font-size: 14px; font-weight: 500; margin-left: 12px;
+    border: 1px solid #e5e7eb; background: #fff;
+    transition: all 0.15s;
+  }
+  .btn-secondary:hover { color: #374151; border-color: #d1d5db; }
+  .version-note { font-size: 12px; color: #9ca3af; margin-top: 10px; }
+
+  /* Features */
+  .features {
+    max-width: 900px; margin: 0 auto;
+    padding: 0 24px 80px;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+  }
+  .feature {
+    padding: 20px; background: #fff;
+    border-radius: 12px; border: 1px solid #e5e7eb;
+  }
+  .feature-icon { font-size: 28px; margin-bottom: 10px; }
+  .feature h3 { font-size: 15px; font-weight: 700; color: #111827; margin-bottom: 6px; }
+  .feature p { font-size: 13px; color: #6b7280; line-height: 1.6; }
+
+  /* Accuracy table */
+  .accuracy { max-width: 720px; margin: 0 auto; padding: 0 24px 60px; }
+  .accuracy h2 { font-size: 22px; font-weight: 700; color: #111827; margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 10px; overflow: hidden; border: 1px solid #e5e7eb; }
+  th { background: #f9fafb; padding: 10px 14px; font-size: 12px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; text-align: left; }
+  td { padding: 12px 14px; font-size: 13px; color: #374151; border-top: 1px solid #f3f4f6; }
+  tr:first-child td { border-top: none; }
+  .cost-badge { font-weight: 700; color: #4338ca; font-variant-numeric: tabular-nums; }
+
+  /* Install guide */
+  .install { max-width: 720px; margin: 0 auto; padding: 0 24px 80px; }
+  .install h2 { font-size: 22px; font-weight: 700; color: #111827; margin-bottom: 16px; }
+  .steps { display: flex; flex-direction: column; gap: 12px; }
+  .step {
+    display: flex; gap: 14px; align-items: flex-start;
+    padding: 14px; background: #fff; border-radius: 10px; border: 1px solid #e5e7eb;
+  }
+  .step-num {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #4338ca; color: #fff; font-size: 13px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .step-body h4 { font-size: 14px; font-weight: 600; color: #111827; margin-bottom: 3px; }
+  .step-body p { font-size: 13px; color: #6b7280; line-height: 1.5; }
+  .step-body code {
+    font-family: monospace; font-size: 12px; background: #f3f4f6;
+    padding: 2px 6px; border-radius: 4px; color: #374151;
+  }
+  .callout {
+    padding: 12px 16px; background: #fef3c7; border-radius: 8px;
+    border-left: 3px solid #f59e0b; font-size: 13px; color: #92400e;
+    margin-top: 12px; line-height: 1.6;
+  }
+
+  /* Footer */
+  footer {
+    text-align: center; padding: 40px 24px;
+    font-size: 12px; color: #9ca3af;
+    border-top: 1px solid #e5e7eb;
+  }
+  footer a { color: #6b7280; text-decoration: none; }
+  footer a:hover { color: #374151; }
+</style>
+</head>
+<body>
+
+<div class="hero">
+  <div class="badge">Free · Open Source · GPL 3.0</div>
+  <h1>AUA-Veritas</h1>
+  <p class="tagline">
+    An AI assistant that asks multiple models, cross-checks the answer,
+    and learns from your corrections — automatically.
+  </p>
+
+  <div class="download-section">
+    <a class="btn-primary" href="#download" id="download-btn">
+      ⬇ Download for Mac
+    </a>
+    <a class="btn-secondary" href="https://github.com/praneethtota/AUA-Veritas" target="_blank">
+      ⭐ GitHub
+    </a>
+  </div>
+  <div class="version-note">
+    Version <span id="version">0.1.0</span> · macOS 12+ · Bring your own API keys
+  </div>
+</div>
+
+<!-- Features -->
+<div class="features">
+  <div class="feature">
+    <div class="feature-icon">🤖</div>
+    <h3>10 frontier models</h3>
+    <p>ChatGPT, Claude, Gemini, Grok, Mistral, Llama via Groq, DeepSeek, and more. Connect whichever you have API keys for.</p>
+  </div>
+  <div class="feature">
+    <div class="feature-icon">✓</div>
+    <h3>Cross-model verification</h3>
+    <p>Send your question to multiple models, compare answers using VCG welfare maximization, and get the most reliable response.</p>
+  </div>
+  <div class="feature">
+    <div class="feature-icon">🧠</div>
+    <h3>Correction memory</h3>
+    <p>When you correct the AI, it saves that as a project memory and applies it automatically to every future answer on the same topic.</p>
+  </div>
+  <div class="feature">
+    <div class="feature-icon">🔒</div>
+    <h3>100% local</h3>
+    <p>All conversations, memories, and API keys stay on your device. Nothing is uploaded. Keys stored in macOS Keychain.</p>
+  </div>
+  <div class="feature">
+    <div class="feature-icon">↗</div>
+    <h3>Restart prompt</h3>
+    <p>One click generates a compact context block you can paste into Claude Code, Cursor, or any AI IDE to restore your project memory.</p>
+  </div>
+  <div class="feature">
+    <div class="feature-icon">🔩</div>
+    <h3>Look under the hood</h3>
+    <p>See each model's reliability score over time — the same 0-100 score the models see in their own system prompts.</p>
+  </div>
+</div>
+
+<!-- Accuracy levels -->
+<div class="accuracy">
+  <h2>Accuracy levels</h2>
+  <table>
+    <tr>
+      <th>Level</th>
+      <th>What happens</th>
+      <th>Cost vs direct</th>
+      <th>Time overhead</th>
+    </tr>
+    <tr>
+      <td><strong>Fast</strong></td>
+      <td>1 model, local validation, correction injection</td>
+      <td class="cost-badge">1× — identical</td>
+      <td>+1-2%</td>
+    </tr>
+    <tr>
+      <td><strong>Balanced</strong></td>
+      <td>Primary + cheap judge cross-checks factual queries</td>
+      <td class="cost-badge">~1.05×</td>
+      <td>+12% avg</td>
+    </tr>
+    <tr>
+      <td><strong>High</strong></td>
+      <td>All models answer in parallel, VCG picks best</td>
+      <td class="cost-badge">N× (N = models)</td>
+      <td>+5-15%</td>
+    </tr>
+    <tr>
+      <td><strong>Maximum</strong></td>
+      <td>All models + peer review round (cheap judge)</td>
+      <td class="cost-badge">~3.2× for 3 models</td>
+      <td>+50-70%</td>
+    </tr>
+  </table>
+</div>
+
+<!-- Install guide -->
+<div class="install" id="download">
+  <h2>Install on macOS</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <h4>Download the .dmg</h4>
+        <p>Click the download button above. The installer is not signed with an Apple Developer certificate — this is normal for open-source apps distributed outside the App Store.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <h4>Open the .dmg and drag to Applications</h4>
+        <p>Double-click <code>AUA-Veritas-*.dmg</code>, then drag the app icon to your Applications folder.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <h4>Open the app (first launch only)</h4>
+        <p>Right-click <code>AUA-Veritas</code> in Applications → click <strong>Open</strong> → click <strong>Open</strong> in the dialog. You only need to do this once.</p>
+        <p style="margin-top:6px">Or: System Settings → Privacy &amp; Security → scroll down → click <strong>Open Anyway</strong> next to AUA-Veritas.</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <h4>Connect your AI models</h4>
+        <p>Enter your API keys. Keys are stored in macOS Keychain — never uploaded anywhere.</p>
+        <p style="margin-top:4px">Need free options? Google Gemini and Groq (Llama) both have generous free tiers.</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <strong>Why the security warning?</strong> Apple requires a $99/year Developer account to sign apps for distribution. AUA-Veritas is free and open-source, so we distribute directly from GitHub. The right-click → Open method bypasses Gatekeeper for apps you trust. The source code is fully open at <a href="https://github.com/praneethtota/AUA-Veritas" style="color:#92400e">github.com/praneethtota/AUA-Veritas</a>.
+  </div>
+</div>
+
+<footer>
+  <p>
+    AUA-Veritas · GPL-3.0 · Built on <a href="https://github.com/praneethtota/Adaptive-Utility-Agent">AUA Framework</a>
+    ·
+    <a href="https://github.com/praneethtota/AUA-Veritas/releases">Releases</a>
+    ·
+    <a href="https://github.com/praneethtota/AUA-Veritas/issues">Report an issue</a>
+  </p>
+  <p style="margin-top:8px">Bring your own API keys. All data stays on your device.</p>
+</footer>
+
+<script>
+  // Dynamically update download button with latest release
+  fetch('https://api.github.com/repos/praneethtota/AUA-Veritas/releases/latest')
+    .then(r => r.json())
+    .then(data => {
+      if (data.tag_name) {
+        document.getElementById('version').textContent = data.tag_name.replace('v', '')
+      }
+      const dmg = (data.assets || []).find(a => a.name.endsWith('.dmg'))
+      if (dmg) {
+        document.getElementById('download-btn').href = dmg.browser_download_url
+        document.getElementById('download-btn').textContent = `⬇ Download for Mac (${(dmg.size / 1024 / 1024).toFixed(0)} MB)`
+      }
+    })
+    .catch(() => {
+      // GitHub API unavailable — link to releases page
+      document.getElementById('download-btn').href = 'https://github.com/praneethtota/AUA-Veritas/releases'
+    })
+</script>
+</body>
+</html>

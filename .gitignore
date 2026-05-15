@@ -9,6 +9,10 @@ venv/
 *.db
 *.log
 
+# PyInstaller build artifacts
+dist-backend/
+build/pyinstaller-work/
+
 # Node / Electron
 node_modules/
 .next/
@@ -26,3 +30,6 @@ Thumbs.db
 .env
 .env.local
 *.key
+
+# UI build output (rebuilt at package time)
+ui/dist/

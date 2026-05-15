@@ -37,32 +37,53 @@ function startApiServer() {
     ? path.join(__dirname, '..')
     : process.resourcesPath
 
-  // Find Python executable
-  const venvPython = IS_DEV
-    ? path.join(resourcesPath, 'venv', 'bin', 'python3')
-    : path.join(resourcesPath, 'venv', 'bin', 'python3')
+  let pythonCmd
+  let apiArgs
 
-  const pythonCmd = fs.existsSync(venvPython) ? venvPython : 'python3'
-
-  const apiMain = IS_DEV
-    ? path.join(resourcesPath, 'api', 'main.py')
-    : path.join(resourcesPath, 'api', 'main.py')
+  if (IS_DEV) {
+    // Development: use system python/uvicorn
+    const venvPython = path.join(resourcesPath, 'venv', 'bin', 'python3')
+    pythonCmd = fs.existsSync(venvPython) ? venvPython : 'python3'
+    apiArgs = [
+      '-m', 'uvicorn', 'api.main:app',
+      '--port', String(API_PORT),
+      '--host', '127.0.0.1',
+      '--no-access-log',
+    ]
+  } else {
+    // Production: use bundled PyInstaller binary
+    const binaryName = process.platform === 'win32' ? 'veritas-backend.exe' : 'veritas-backend'
+    const bundledBinary = path.join(resourcesPath, 'backend', binaryName)
+    if (fs.existsSync(bundledBinary)) {
+      // Make executable on unix
+      if (process.platform !== 'win32') {
+        try { require('child_process').execSync(`chmod +x "${bundledBinary}"`) } catch (_) {}
+      }
+      pythonCmd = bundledBinary
+      apiArgs = []
+    } else {
+      // Fallback to system python if binary not found (shouldn't happen in production)
+      console.error('Backend binary not found at:', bundledBinary)
+      pythonCmd = 'python3'
+      apiArgs = ['-m', 'uvicorn', 'api.main:app', '--port', String(API_PORT), '--host', '127.0.0.1']
+    }
+  }
 
   const logDir = app.getPath('logs')
   if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true })
   const logPath = path.join(logDir, 'api.log')
   const logStream = fs.createWriteStream(logPath, { flags: 'a' })
 
-  console.log(`Starting API server: ${pythonCmd} -m uvicorn api.main:app --port ${API_PORT}`)
+  console.log(`Starting API server: ${pythonCmd}`)
 
-  apiProcess = spawn(pythonCmd, [
-    '-m', 'uvicorn', 'api.main:app',
-    '--port', String(API_PORT),
-    '--host', '127.0.0.1',
-    '--no-access-log',
-  ], {
+  apiProcess = spawn(pythonCmd, apiArgs, {
     cwd: IS_DEV ? path.join(__dirname, '..') : resourcesPath,
-    env: { ...process.env, PYTHONPATH: IS_DEV ? path.join(__dirname, '..') : resourcesPath },
+    env: {
+      ...process.env,
+      PYTHONPATH: IS_DEV ? path.join(__dirname, '..') : resourcesPath,
+      VERITAS_API_PORT: String(API_PORT),
+      VERITAS_API_HOST: '127.0.0.1',
+    },
   })
 
   apiProcess.stdout.pipe(logStream)

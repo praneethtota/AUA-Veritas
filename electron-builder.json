@@ -1,0 +1,91 @@
+{
+  "appId": "com.praneethtota.aua-veritas",
+  "productName": "AUA-Veritas",
+  "asar": true,
+  "copyright": "Copyright © 2026 Praneeth Tota. GPL-3.0",
+
+  "directories": {
+    "output": "release"
+  },
+
+  "files": [
+    "electron/**/*",
+    "ui/dist/**/*",
+    "!node_modules/**",
+    "!build/**",
+    "!dist-backend/**",
+    "!tests/**",
+    "!core/**",
+    "!api/**",
+    "!db/**",
+    "!scripts/**"
+  ],
+
+  "extraResources": [
+    {
+      "from": "dist-backend/veritas-backend",
+      "to": "backend/veritas-backend",
+      "filter": ["**/*"]
+    },
+    {
+      "from": "db/schema.sql",
+      "to": "db/schema.sql"
+    }
+  ],
+
+  "mac": {
+    "category": "public.app-category.productivity",
+    "target": [
+      {
+        "target": "dmg",
+        "arch": ["x64", "arm64"]
+      }
+    ],
+    "icon": "assets/icon.icns",
+    "darkModeSupport": true,
+    "hardenedRuntime": false,
+    "gatekeeperAssess": false
+  },
+
+  "dmg": {
+    "title": "AUA-Veritas ${version}",
+    "background": "assets/dmg-background.png",
+    "icon": "assets/icon.icns",
+    "iconSize": 80,
+    "contents": [
+      { "x": 410, "y": 150, "type": "link", "path": "/Applications" },
+      { "x": 130, "y": 150, "type": "file" }
+    ],
+    "window": {
+      "width": 540,
+      "height": 380
+    }
+  },
+
+  "win": {
+    "target": [
+      { "target": "nsis", "arch": ["x64"] }
+    ],
+    "icon": "assets/icon.ico",
+    "requestedExecutionLevel": "asInvoker"
+  },
+
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "installerIcon": "assets/icon.ico",
+    "uninstallerIcon": "assets/icon.ico"
+  },
+
+  "linux": {
+    "target": [
+      { "target": "AppImage", "arch": ["x64"] }
+    ],
+    "icon": "assets/icon.png",
+    "category": "Utility"
+  },
+
+  "publish": null
+}
