@@ -181,13 +181,19 @@ class VeritasRouter:
             for m in models_to_use
         ]
         raw_results = await asyncio.gather(*answer_tasks, return_exceptions=True)
-        responses: list[ModelResponse] = [
-            r for r in raw_results if isinstance(r, ModelResponse)
-        ]
+        responses: list[ModelResponse] = []
+        skipped_models: list[str] = []
+        for model_id, result in zip(models_to_use, raw_results):
+            if isinstance(result, ModelResponse):
+                responses.append(result)
+            else:
+                skipped_models.append(model_id)
+                log.warning("Model %s failed: %s", model_id, result)
 
         if not responses:
+            skipped_str = ', '.join(skipped_models) if skipped_models else 'all'
             return RouterResponse(
-                response="All selected models are temporarily unavailable. Please try again.",
+                response=f"All selected models are temporarily unavailable ({skipped_str} failed — rate limit or API error). Please try again or select different models.",
                 primary_model="", all_models_used=models_to_use,
                 confidence_label="Uncertain", callout_type=None, callout_text=None,
                 welfare_scores=None, peer_review_used=False,
@@ -225,6 +231,13 @@ class VeritasRouter:
         elif disagreement_note:
             callout_type = "disagreement"
             callout_text = disagreement_note
+        elif skipped_models:
+            callout_type = "disagreement"
+            callout_text = (
+                f"{', '.join(skipped_models)} {'was' if len(skipped_models)==1 else 'were'} "
+                f"unavailable (rate limit or API error) — answered with {len(responses)} "
+                f"model{'s' if len(responses)!=1 else ''}."
+            )
         elif len(responses) >= 2 and not disagreement_note:
             callout_type = "crosscheck"
             callout_text = (
