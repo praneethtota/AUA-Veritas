@@ -3,6 +3,7 @@
 
 import { useState } from 'react'
 import type { Conversation, AccuracyLevel, ModelInfo } from '../types'
+import ConversationSearch from './ConversationSearch'
 
 const ACCURACY_LEVELS = [
   { value: 'fast' as AccuracyLevel,     label: 'Fast',     desc: '1 model, fastest',             cost: '1×',      time: '+1-2%' },
@@ -37,9 +38,16 @@ export default function Sidebar({
 }: Props) {
   const [addingProject, setAddingProject] = useState(false)
   const [newProjectName, setNewProjectName] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
 
   const enabledCount = enabledModels.length
   const currentLevel = ACCURACY_LEVELS.find(a => a.value === accuracy) || ACCURACY_LEVELS[1]
+
+  const filteredConversations = searchQuery
+    ? conversations.filter(c =>
+        (c.title || 'New Chat').toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : conversations
 
   const handleAddProject = async () => {
     if (!newProjectName.trim()) return
@@ -65,7 +73,7 @@ export default function Sidebar({
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>⚙</button>
         </div>
-        <button onClick={onNewConversation} style={{
+        <button onClick={onNewConversation} title="New chat (⌘K)" style={{
           width: '100%', padding: '7px 10px', borderRadius: 7, fontSize: 13, fontWeight: 600,
           background: '#4338ca', color: '#fff', border: 'none', cursor: 'pointer',
           display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'center',
@@ -128,11 +136,12 @@ export default function Sidebar({
 
       {/* Conversations list */}
       <div style={{ flex: 1, overflowY: 'auto', padding: '6px 0' }}>
-        {conversations.length === 0 ? (
-          <div style={{ padding: '12px 14px', fontSize: 12, color: '#9ca3af' }}>
-            No conversations yet
+        <ConversationSearch onSearch={setSearchQuery} />
+        {filteredConversations.length === 0 ? (
+          <div style={{ padding: '8px 14px', fontSize: 12, color: '#9ca3af' }}>
+            {searchQuery ? 'No matches' : 'No conversations yet'}
           </div>
-        ) : conversations.map(conv => (
+        ) : filteredConversations.map(conv => (
           <button
             key={conv.conversation_id}
             onClick={() => onSelectConversation(conv.conversation_id)}

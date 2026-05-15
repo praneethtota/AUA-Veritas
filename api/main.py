@@ -326,3 +326,97 @@ async def create_project(body: dict, user_id: str = "local"):
     except Exception as e:
         raise HTTPException(500, str(e))
     return {"project_id": project_id, "name": body.get("name", "New Project")}
+
+
+# ── Look Under the Hood — model reliability history ───────────────────────────
+
+@app.get("/reliability")
+async def get_reliability():
+    """
+    Return per-model reliability score history for the Look Under the Hood panel.
+    Returns models with their audit_log events, sorted by created_at asc.
+    """
+    if not _router:
+        return []
+    try:
+        from core.config import SUPPORTED_MODELS
+        events = _router._state.query("audit_log", filters={"event_type": "score_update"}, limit=500)
+        # Group by model_id
+        model_events: dict[str, list] = {}
+        for e in sorted(events, key=lambda x: x.get("created_at", 0)):
+            mid = e.get("model_id", "")
+            if mid:
+                model_events.setdefault(mid, []).append(e)
+
+        result = []
+        for model_id, evts in model_events.items():
+            if not evts:
+                continue
+            scores = [e.get("score_after", 70) for e in evts]
+            current = scores[-1] if scores else 70
+            trend = "up" if len(scores) >= 2 and scores[-1] > scores[-2] else \
+                    "down" if len(scores) >= 2 and scores[-1] < scores[-2] else "flat"
+            spec = SUPPORTED_MODELS.get(model_id, {})
+            result.append({
+                "model_id": model_id,
+                "display_name": spec.get("display_name", model_id),
+                "events": evts,
+                "current_score": current,
+                "trend": trend,
+            })
+        return result
+    except Exception as e:
+        log.error("reliability endpoint error: %s", e)
+        return []
+
+
+# ── Usage statistics ──────────────────────────────────────────────────────────
+
+@app.get("/usage")
+async def get_usage():
+    """Return per-model query counts and estimated costs."""
+    if not _router:
+        return {"models": [], "total_cost": 0, "total_queries": 0}
+    try:
+        from core.config import SUPPORTED_MODELS
+        runs = _router._state.query("model_runs", limit=5000)
+        model_counts: dict[str, dict] = {}
+        for r in runs:
+            mid = r.get("model_id", "")
+            if not mid:
+                continue
+            if mid not in model_counts:
+                model_counts[mid] = {"count": 0, "last_used": None}
+            model_counts[mid]["count"] += 1
+            ts = r.get("created_at")
+            if ts and (not model_counts[mid]["last_used"] or ts > model_counts[mid]["last_used"]):
+                model_counts[mid]["last_used"] = ts
+
+        models_out = []
+        total_cost = 0.0
+        total_queries = 0
+        for model_id, data in model_counts.items():
+            count = data["count"]
+            spec = SUPPORTED_MODELS.get(model_id, {})
+            is_judge = spec.get("is_cheap_judge", False)
+            cost_per = 0.001 if is_judge else 0.01
+            cost = count * cost_per
+            total_cost += cost
+            total_queries += count
+            models_out.append({
+                "model_id": model_id,
+                "display_name": spec.get("display_name", model_id),
+                "query_count": count,
+                "estimated_cost": round(cost, 6),
+                "last_used": data["last_used"],
+            })
+
+        models_out.sort(key=lambda x: -x["query_count"])
+        return {
+            "models": models_out,
+            "total_cost": round(total_cost, 6),
+            "total_queries": total_queries,
+        }
+    except Exception as e:
+        log.error("usage endpoint error: %s", e)
+        return {"models": [], "total_cost": 0, "total_queries": 0}

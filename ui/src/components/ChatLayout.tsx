@@ -6,6 +6,8 @@ import ChatPanel from './ChatPanel'
 import QualityPanel from './QualityPanel'
 import SettingsPage from './SettingsPage'
 import AutoSaveToast, { type ToastMemory } from './AutoSaveToast'
+import LookUnderTheHood from './LookUnderTheHood'
+import UsagePage from './UsagePage'
 import type { PendingMemory } from './PassiveSaveCard'
 import {
   listConversations, createConversation, listModels,
@@ -28,6 +30,31 @@ export default function ChatLayout() {
   const [showSettings, setShowSettings] = useState(false)
   const [toastMemory, setToastMemory] = useState<ToastMemory | null>(null)
   const [pendingMemories, setPendingMemories] = useState<PendingMemory[]>([])
+  const [showHood, setShowHood] = useState(false)
+  const [showUsage, setShowUsage] = useState(false)
+  const [rightTab, setRightTab] = useState<'quality' | 'memory'>('quality')
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────────────────
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      const meta = e.metaKey || e.ctrlKey
+      if (meta && e.key === 'k') {
+        e.preventDefault()
+        handleNewConversation()
+      }
+      if (meta && e.key === 'm') {
+        e.preventDefault()
+        setRightTab('memory')
+      }
+      if (e.key === 'Escape') {
+        setShowSettings(false)
+        setShowHood(false)
+        setShowUsage(false)
+      }
+    }
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
+  }, [])
 
   useEffect(() => {
     loadConversations()
@@ -226,6 +253,10 @@ export default function ChatLayout() {
           response={lastResponse}
           models={models}
           activeProject={activeProject}
+          activeTab={rightTab}
+          onTabChange={setRightTab}
+          onOpenHood={() => setShowHood(true)}
+          onOpenUsage={() => setShowUsage(true)}
         />
       </div>
 
@@ -237,6 +268,8 @@ export default function ChatLayout() {
       />
 
       {showSettings && <SettingsPage onClose={() => setShowSettings(false)} />}
+      {showHood && <LookUnderTheHood onClose={() => setShowHood(false)} />}
+      {showUsage && <UsagePage onClose={() => setShowUsage(false)} />}
     </>
   )
 }

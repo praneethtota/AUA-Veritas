@@ -76,21 +76,55 @@ function AssistantMessage({ msg }: { msg: Message }) {
   )
 }
 
+const CALLOUT_EXPLANATIONS: Record<string, string> = {
+  correction:    'I detected a correction signal in your message and saved it as a project memory. Future answers on this topic will automatically apply this correction.',
+  crosscheck:    'I sent this question to multiple models simultaneously. They gave consistent answers, so the response has been cross-verified.',
+  disagreement:  'The models gave different answers. I selected the most reliable response based on their track records, but you may want to verify this independently.',
+  highstakes:    'This topic (medical, legal, or financial) carries real-world consequences. AI models can make mistakes on nuanced professional questions — always verify with a qualified expert.',
+  conflict:      'A new correction conflicts with an existing project memory. The scope resolver is asking how to handle it.',
+  context_reset: 'The conversation exceeded the model\'s context window. I automatically resent your project memory to maintain continuity.',
+}
+
 function CalloutMessage({ msg }: { msg: Message }) {
+  const [expanded, setExpanded] = useState(false)
   const type = msg.callout_type || 'correction'
   const style = CALLOUT_COLORS[type] || CALLOUT_COLORS.correction
+  const explanation = CALLOUT_EXPLANATIONS[type]
+
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 8 }}>
       <div style={{
         maxWidth: '80%', padding: '8px 12px',
         borderRadius: 8, borderLeft: `3px solid ${style.border}`,
         background: style.bg, fontSize: 13, color: '#374151', lineHeight: 1.5,
-        display: 'flex', gap: 8, alignItems: 'flex-start',
       }}>
-        <span style={{ color: style.border, fontWeight: 700, flexShrink: 0, fontSize: 14 }}>
-          {style.icon}
-        </span>
-        <span>{msg.content}</span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+          <span style={{ color: style.border, fontWeight: 700, flexShrink: 0, fontSize: 14 }}>
+            {style.icon}
+          </span>
+          <span style={{ flex: 1 }}>{msg.content}</span>
+          {explanation && (
+            <button
+              onClick={() => setExpanded(e => !e)}
+              title="Why did I get this?"
+              style={{
+                background: 'none', border: 'none', cursor: 'pointer',
+                fontSize: 11, color: '#9ca3af', flexShrink: 0, padding: 0,
+                fontWeight: 500,
+              }}
+            >
+              {expanded ? '▲' : '?'}
+            </button>
+          )}
+        </div>
+        {expanded && explanation && (
+          <div style={{
+            marginTop: 6, paddingTop: 6, borderTop: `1px solid ${style.border}22`,
+            fontSize: 12, color: '#6b7280', lineHeight: 1.6,
+          }}>
+            {explanation}
+          </div>
+        )}
       </div>
     </div>
   )

@@ -10,6 +10,10 @@ interface Props {
   response: QueryResponse | null
   models: Record<string, ModelInfo>
   activeProject?: string
+  activeTab?: 'quality' | 'memory'
+  onTabChange?: (tab: 'quality' | 'memory') => void
+  onOpenHood?: () => void
+  onOpenUsage?: () => void
 }
 
 type Tab = 'quality' | 'memory'
@@ -165,8 +169,10 @@ function QualityTab({ response }: { response: QueryResponse | null }) {
   )
 }
 
-export default function QualityPanel({ response, models, activeProject }: Props) {
+export default function QualityPanel({ response, models, activeProject, activeTab, onTabChange, onOpenHood, onOpenUsage }: Props) {
   const [tab, setTab] = useState<Tab>('quality')
+  const currentTab = activeTab ?? tab
+  const setCurrentTab = (t: Tab) => { setTab(t); onTabChange?.(t) }
 
   return (
     <div style={{
@@ -176,23 +182,39 @@ export default function QualityPanel({ response, models, activeProject }: Props)
       {/* Tab bar */}
       <div style={{
         display: 'flex', borderBottom: '1px solid #e5e7eb',
-        padding: '0 14px', flexShrink: 0,
+        padding: '0 14px', flexShrink: 0, alignItems: 'center',
       }}>
         {(['quality', 'memory'] as Tab[]).map(t => (
-          <button key={t} onClick={() => setTab(t)} style={{
-            padding: '12px 12px 10px', fontSize: 13, fontWeight: tab === t ? 600 : 400,
-            color: tab === t ? '#4338ca' : '#9ca3af',
+          <button key={t} onClick={() => setCurrentTab(t)} style={{
+            padding: '12px 12px 10px', fontSize: 13, fontWeight: currentTab === t ? 600 : 400,
+            color: currentTab === t ? '#4338ca' : '#9ca3af',
             border: 'none', background: 'transparent', cursor: 'pointer',
-            borderBottom: tab === t ? '2px solid #4338ca' : '2px solid transparent',
+            borderBottom: currentTab === t ? '2px solid #4338ca' : '2px solid transparent',
             marginBottom: -1, transition: 'all 0.15s', textTransform: 'capitalize',
           }}>
             {t}
           </button>
         ))}
+        <span style={{ flex: 1 }} />
+        {/* Usage link */}
+        {onOpenUsage && (
+          <button onClick={onOpenUsage} title="Usage & Cost" style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: 13, color: '#d1d5db', padding: '8px 4px',
+          }}>📊</button>
+        )}
+        {/* Look Under the Hood */}
+        {onOpenHood && (
+          <button onClick={onOpenHood} title="Look under the hood" style={{
+            background: 'none', border: 'none', cursor: 'pointer',
+            fontSize: 12, color: '#d1d5db', padding: '8px 4px',
+            whiteSpace: 'nowrap',
+          }}>🔩</button>
+        )}
       </div>
 
       {/* Tab content */}
-      {tab === 'quality' ? (
+      {currentTab === 'quality' ? (
         <QualityTab response={response} />
       ) : (
         <MemoryPanel activeProject={activeProject} />
