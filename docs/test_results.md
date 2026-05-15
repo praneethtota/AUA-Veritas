@@ -297,3 +297,51 @@ Replace `✅ PASS` with `**🔴 FAIL**` and add a note column or footnote explai
 |-----|------|-------|--------|--------|-----------|----------|
 | 1 | 2026-05-14 | 122 | 122 | 0 | 122 | 9.90s |
 | 2 | 2026-05-15 | 159 | 159 | 0 | 37 | 22.33s |
+
+---
+
+## Run 3 — 2026-05-15
+
+**Command:** `PYTHONPATH=/home/claude/aua-veritas pytest tests/ -v`
+**Result:** 179 passed, 0 failed — 6.34s
+**New tests this run:** 20 (tests/test_model_incentive_router.py)
+**Environment:** Python 3.12.3, pytest 9.0.3
+
+**Note on make_router fixture:** VeritasState and other dependencies are imported inside `__init__` (local imports), so `patch("core.router.VeritasState")` fails. Fixed by using `object.__new__(VeritasRouter)` to bypass `__init__` entirely and injecting mocks directly.
+
+---
+
+### test_model_incentive_router.py — Model Incentive Transparency + Memory Pipeline
+
+| # | Test | Input | Expected Output | Actual Output | Result |
+|---|------|-------|-----------------|---------------|--------|
+| 160 | `test_get_reliability_score_no_history` | `_state.query` returns `[]` | `(70, None)` — neutral start, no trajectory | `(70, None)` | ✅ PASS |
+| 161 | `test_get_reliability_score_single_run` | One run with `utility_score=0.75` | `(75, None)` — only one run, no trajectory | `(75, None)` | ✅ PASS |
+| 162 | `test_get_reliability_score_with_trajectory` | Two runs: current=0.80, previous=0.60 | `(80, 60)` | `(80, 60)` | ✅ PASS |
+| 163 | `test_get_reliability_score_clamped` | `utility_score=1.0` then `utility_score=0.0` | `(100, None)` then `(0, None)` | Both match | ✅ PASS |
+| 164 | `test_build_system_context_answer_round` | `model_id="gpt-4o"`, no history | `"70"` in context, `"competitive evaluation"`, `"Scores increase"`, `"Do not mention"` | All present | ✅ PASS |
+| 165 | `test_build_system_context_reviewer_round` | `model_id="gpt-4o-mini"`, `is_reviewer=True` | `"reviewer"` and `"reviewing"` present, `"Do not mention"` absent | All match | ✅ PASS |
+| 166 | `test_build_system_context_shows_trajectory_improved` | current=0.80, previous=0.65 | `"80"`, `"65"`, `"improved"` in context | All present | ✅ PASS |
+| 167 | `test_build_system_context_shows_trajectory_dropped` | current=0.60, previous=0.75 | `"dropped"` in context | Present | ✅ PASS |
+| 168 | `test_build_system_context_no_formula_exposed` | Any model, any history | `"P(domain)"`, `"prior_mean_u"`, `"w_e"`, `"formula"` all absent | None found | ✅ PASS |
+| 169 | `test_build_system_context_no_competitor_named` | `model_id="gpt-4o"` | `"claude"` and `"gemini"` absent from context (no competitor named) | Neither found | ✅ PASS |
+| 170 | `test_build_prompt_no_corrections` | `query="What is merge sort?"`, `corrections=[]` | Returns query unchanged | `"What is merge sort?"` | ✅ PASS |
+| 171 | `test_build_prompt_with_corrections` | 2 corrections with `corrective_instruction` | Both instructions + `"VERIFIED CORRECTIONS"` + query in output | All present | ✅ PASS |
+| 172 | `test_build_prompt_corrections_before_query` | 1 correction + query | `"VERIFIED"` appears before `"What database?"` in string | Corrections first | ✅ PASS |
+| 173 | `test_build_prompt_caps_at_5_corrections` | 10 corrections | Corrections 0–4 present, correction 5 absent | Cap enforced | ✅ PASS |
+| 174 | `test_update_model_score_writes_audit_log` | `model_id="gpt-4o"`, current=72, `delta=-10` | `audit_log` table, `model_id="gpt-4o"`, `score_before=72`, `score_after=62`, `verdict="incorrect"` | All match | ✅ PASS |
+| 175 | `test_update_model_score_clamped_at_0` | current=5, `delta=-20` | `score_after == 0` (not -15) | `0` | ✅ PASS |
+| 176 | `test_update_model_score_clamped_at_100` | current=98, `delta=+10` | `score_after == 100` (not 108) | `100` | ✅ PASS |
+| 177 | `test_update_model_score_positive_delta_verdict` | current=70, `delta=+2` | `verdict == "correct"` | `"correct"` | ✅ PASS |
+| 178 | `test_route_correction_signal_triggers_memory_pipeline` | `trigger.detect=True`, `conversation_history` with prior AI response | `_handle_correction` called once | Called once | ✅ PASS |
+| 179 | `test_route_non_correction_skips_memory_pipeline` | `trigger.detect=False`, no models | `_handle_correction` never called | Not called | ✅ PASS |
+
+---
+
+## Summary
+
+| Run | Date | Total | Passed | Failed | New Tests | Duration |
+|-----|------|-------|--------|--------|-----------|----------|
+| 1 | 2026-05-14 | 122 | 122 | 0 | 122 | 9.90s |
+| 2 | 2026-05-15 | 159 | 159 | 0 | 37 | 22.33s |
+| 3 | 2026-05-15 | 179 | 179 | 0 | 20 | 6.34s |

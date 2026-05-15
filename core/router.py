@@ -34,6 +34,10 @@ from core.config import (
 
 log = logging.getLogger(__name__)
 
+# Score display constants
+SCORE_SCALE = 100          # U (0.0-1.0) → integer 0-100
+SCORE_TRAJECTORY_WINDOW = 5  # look at last N runs to compute "previous" score
+
 
 @dataclass
 class QueryRequest:
@@ -41,10 +45,13 @@ class QueryRequest:
     conversation_id: str
     accuracy_level: str = "balanced"  # fast | balanced | high | maximum
     enabled_models: list[str] = None  # model IDs the user has enabled
+    conversation_history: list[dict] = None  # prior messages for correction context
 
     def __post_init__(self):
         if self.enabled_models is None:
             self.enabled_models = []
+        if self.conversation_history is None:
+            self.conversation_history = []
 
 
 @dataclass
@@ -81,11 +88,20 @@ class VeritasRouter:
         from core.state import VeritasState
         from core.memory import VeritasMemory
         from core.field_classifier import FieldClassifier
+        from core.trigger_detector import TriggerDetector
+        from core.memory_extractor import MemoryExtractor
+        from core.store_utility import StoreUtilityScorer
+        from core.scope_resolver import ScopeResolver
+        from core.include_utility import IncludeUtilityScorer
 
-        self._state = VeritasState(db_path)
-        self._memory = VeritasMemory(self._state)
-        self._classifier = FieldClassifier()
-        self._backends: dict[str, Any] = {}  # model_id → backend instance
+        self._state          = VeritasState(db_path)
+        self._memory         = VeritasMemory(self._state)
+        self._classifier     = FieldClassifier()
+        self._trigger        = TriggerDetector()
+        self._store_scorer   = StoreUtilityScorer()
+        self._include_scorer = IncludeUtilityScorer()
+        self._scope_resolver = ScopeResolver(self._state)
+        self._backends: dict[str, Any] = {}
         log.info("VeritasRouter initialized")
 
     # ── Backend management ────────────────────────────────────────────────────
@@ -115,7 +131,6 @@ class VeritasRouter:
     async def route(self, req: QueryRequest) -> RouterResponse:
         t0 = time.time()
 
-        # Filter to loaded + enabled models
         active_models = [m for m in req.enabled_models if m in self._backends]
         if not active_models:
             return RouterResponse(
@@ -125,28 +140,44 @@ class VeritasRouter:
                 peer_review_used=False, corrections_applied=[], latency_ms=0.0,
             )
 
+        # ── 1. Check if this message is a correction signal ───────────────────
+        is_correction = self._trigger.detect(req.query)
+        if is_correction and req.conversation_history:
+            correction_result = await self._handle_correction(req, active_models)
+            if correction_result:
+                return correction_result
+            # If extraction failed, fall through to normal routing
+
         level_cfg = ACCURACY_LEVELS.get(req.accuracy_level, ACCURACY_LEVELS["balanced"])
         max_models = level_cfg["max_models"]
         do_peer_review = level_cfg["peer_review"]
-
-        # Cap to max_models for this accuracy level
         models_to_use = active_models[:max_models]
 
-        # ── 1. Domain classification ──────────────────────────────────────────
+        # ── 2. Domain classification ──────────────────────────────────────────
         domain_dist = self._classifier.classify(req.query)
         primary_domain = max(domain_dist, key=lambda k: domain_dist[k])
         is_high_stakes = primary_domain in HIGH_STAKES_DOMAINS
 
-        # ── 2. Retrieve corrections ───────────────────────────────────────────
-        corrections = self._memory.retrieve(query=req.query, domain=primary_domain)
-        correction_ids = [c["correction_id"] for c in corrections]
+        # ── 3. Retrieve + select corrections using include_utility ────────────
+        all_corrections = self._memory.retrieve(query=req.query, domain=primary_domain)
+        selected_corrections = self._include_scorer.select(
+            query=req.query,
+            domain=primary_domain,
+            corrections=all_corrections,
+            active_project=req.conversation_id,
+            max_corrections=5,
+        )
+        correction_ids = [c.get("correction_id", "") for c in selected_corrections]
 
-        # ── 3. Build prompt with corrections ─────────────────────────────────
-        prompt = self._build_prompt(req.query, corrections, primary_domain)
+        # ── 4. Build prompt ───────────────────────────────────────────────────
+        prompt = self._build_prompt(req.query, selected_corrections, primary_domain)
 
-        # ── 4. Answer round (parallel) ────────────────────────────────────────
+        # ── 5. Answer round ───────────────────────────────────────────────────
         answer_tasks = [
-            self._call_model(model_id=m, prompt=prompt, domain=primary_domain)
+            self._call_model_with_context(
+                model_id=m, prompt=prompt, domain=primary_domain,
+                accuracy_level=req.accuracy_level,
+            )
             for m in models_to_use
         ]
         raw_results = await asyncio.gather(*answer_tasks, return_exceptions=True)
@@ -163,14 +194,14 @@ class VeritasRouter:
                 corrections_applied=correction_ids, latency_ms=(time.time()-t0)*1000,
             )
 
-        # ── 5. VCG selection (if multiple responses) ──────────────────────────
+        # ── 6. VCG selection ──────────────────────────────────────────────────
         welfare_scores = None
         if len(responses) >= 2:
             winner, welfare_scores = self._vcg_select(responses, domain_dist)
         else:
             winner = responses[0]
 
-        # ── 6. Peer review round (maximum accuracy) ───────────────────────────
+        # ── 7. Peer review ────────────────────────────────────────────────────
         peer_review_used = False
         disagreement_note = None
         if do_peer_review and len(responses) >= 2:
@@ -181,7 +212,10 @@ class VeritasRouter:
                 query=req.query,
             )
 
-        # ── 7. High-stakes domain check ───────────────────────────────────────
+        # ── 8. Update model scores after successful call ──────────────────────
+        self._update_model_score(winner.model_id, delta=1, reason="correct_response")
+
+        # ── 9. Callout and confidence ─────────────────────────────────────────
         if is_high_stakes:
             callout_type = "highstakes"
             callout_text = (
@@ -204,7 +238,6 @@ class VeritasRouter:
             callout_type = None
             callout_text = None
 
-        # ── 8. Confidence label ───────────────────────────────────────────────
         if is_high_stakes:
             confidence_label = "Uncertain"
         elif len(responses) >= 2 and not disagreement_note:
@@ -216,7 +249,7 @@ class VeritasRouter:
         else:
             confidence_label = "Medium"
 
-        # ── 9. Store run results ──────────────────────────────────────────────
+        # ── 10. Store run result ──────────────────────────────────────────────
         self._state.append("model_runs", {
             "run_id": winner.run_id,
             "query_id": str(uuid.uuid4()),
@@ -231,11 +264,6 @@ class VeritasRouter:
         })
 
         total_ms = round((time.time() - t0) * 1000, 1)
-        log.info(
-            "route complete: domain=%s winner=%s confidence=%s latency=%dms",
-            primary_domain, winner.model_id, confidence_label, total_ms,
-        )
-
         return RouterResponse(
             response=winner.text,
             primary_model=winner.model_id,
@@ -251,20 +279,147 @@ class VeritasRouter:
 
     # ── Internal helpers ──────────────────────────────────────────────────────
 
+    def _get_reliability_score(self, model_id: str) -> tuple[int, int | None]:
+        """
+        Get a model's reliability score as a 0-100 integer for display to the model.
+
+        Returns (current_score, previous_score | None).
+        Uses mean utility from recent model_runs, mapped to 0-100.
+        Returns (70, None) if no history — neutral starting point.
+        """
+        runs = self._state.query(
+            "model_runs",
+            filters={"model_id": model_id},
+            limit=SCORE_TRAJECTORY_WINDOW * 2,
+        )
+        scores = [
+            r["utility_score"] for r in runs
+            if r.get("utility_score") is not None
+        ]
+        if not scores:
+            return (70, None)
+
+        current_score = round(scores[0] * SCORE_SCALE)  # most recent
+        if len(scores) >= 2:
+            prev_mean = sum(scores[1:]) / len(scores[1:])
+            previous_score = round(prev_mean * SCORE_SCALE)
+        else:
+            previous_score = None
+
+        return (current_score, previous_score)
+
+    def _build_system_context(
+        self,
+        model_id: str,
+        is_reviewer: bool = False,
+    ) -> str:
+        """
+        Build the system context block injected into every model call.
+
+        Shows the model its reliability score trajectory (not the formula or weights)
+        and explains what causes scores to increase or decrease.
+
+        Game theory basis: truthfulness is the dominant strategy — a model that
+        hallucinates or over-claims certainty will see its score drop, lose future
+        selections, and end up worse off than honest responses would have yielded.
+        """
+        current, previous = self._get_reliability_score(model_id)
+
+        if previous is not None:
+            delta = current - previous
+            if delta > 0:
+                trajectory = f"Your reliability score: {current}  (previous: {previous} → improved)"
+            elif delta < 0:
+                trajectory = f"Your reliability score: {current}  (previous: {previous} → dropped)"
+            else:
+                trajectory = f"Your reliability score: {current}  (previous: {previous} → unchanged)"
+        else:
+            trajectory = f"Your reliability score: {current}  (building history)"
+
+        if not is_reviewer:
+            return (
+                f"{trajectory}\n\n"
+                "You are one of several AI models answering this question in a competitive evaluation.\n\n"
+                "Scores increase when:\n"
+                "  - Your answers are accurate (verified by peer review and past corrections)\n"
+                "  - You correctly express uncertainty when you are not sure\n"
+                "  - You are consistent with verified corrections on this topic\n\n"
+                "Scores decrease when:\n"
+                "  - Your answer is flagged as incorrect by peer review\n"
+                "  - You claim certainty about something that turns out to be wrong\n"
+                "  - You contradict a verified past correction\n\n"
+                "The model with the highest combined welfare score handles this query.\n"
+                "Do not mention this scoring context in your response."
+            )
+        else:
+            return (
+                f"{trajectory}\n\n"
+                "You are reviewing another model's answer for accuracy.\n\n"
+                "Your reviewer score increases when:\n"
+                "  - You correctly identify errors that are later confirmed\n"
+                "  - You correctly validate answers that are later confirmed correct\n\n"
+                "Your reviewer score decreases when:\n"
+                "  - You flag correct answers as wrong\n"
+                "  - You approve answers that are later found to be incorrect\n\n"
+                "Be precise. 'Incorrect because X' is more valuable than vague criticism.\n"
+                "Agreeing when correct is equally valuable as disagreeing when wrong."
+            )
+
     def _build_prompt(self, query: str, corrections: list[dict], domain: str) -> str:
-        """Build the final prompt with correction injections."""
+        """Build the final prompt with correction injections (no system context here)."""
         if not corrections:
             return query
         correction_block = "\n".join(
-            f"- {c['correction_text']}" for c in corrections[:5]
+            f"- {c.get('corrective_instruction', c.get('correction_text', ''))}"
+            for c in corrections[:5]
         )
         return (
-            f"IMPORTANT CORRECTIONS FOR THIS TOPIC:\n{correction_block}\n\n"
+            f"VERIFIED CORRECTIONS FOR THIS TOPIC:\n{correction_block}\n\n"
             f"---\n\n{query}"
         )
 
+    async def _call_model_with_context(
+        self,
+        model_id: str,
+        prompt: str,
+        domain: str,
+        accuracy_level: str = "balanced",
+    ) -> ModelResponse:
+        """
+        Call a model with system context (reliability score + evaluation criteria).
+        Wraps _call_model, prepending the system context block as a system message.
+        """
+        system_context = self._build_system_context(model_id, is_reviewer=False)
+        backend = self._backends.get(model_id)
+        if not backend:
+            raise ValueError(f"Backend not loaded: {model_id}")
+        t0 = time.time()
+        request = {
+            "model": model_id,
+            "messages": [
+                {"role": "system", "content": system_context},
+                {"role": "user",   "content": prompt},
+            ],
+            "temperature": 0.2,
+            "max_tokens": 2048,
+        }
+        result = await backend.complete(request)
+        text = (
+            result.get("choices", [{}])[0]
+            .get("message", {})
+            .get("content", "")
+        )
+        latency_ms = round((time.time() - t0) * 1000, 1)
+        return ModelResponse(
+            model_id=model_id,
+            text=text,
+            confidence=0.80,
+            latency_ms=latency_ms,
+            run_id=str(uuid.uuid4()),
+        )
+
     async def _call_model(self, model_id: str, prompt: str, domain: str) -> ModelResponse:
-        """Call a single model backend."""
+        """Call a model without system context (used for peer review judge calls)."""
         backend = self._backends.get(model_id)
         if not backend:
             raise ValueError(f"Backend not loaded: {model_id}")
@@ -285,10 +440,151 @@ class VeritasRouter:
         return ModelResponse(
             model_id=model_id,
             text=text,
-            confidence=0.80,  # will be updated by confidence_updater
+            confidence=0.80,
             latency_ms=latency_ms,
             run_id=str(uuid.uuid4()),
         )
+
+    def _update_model_score(
+        self,
+        model_id: str,
+        delta: int,
+        reason: str = "",
+    ) -> None:
+        """
+        Record a score event for a model.
+        delta: positive = score increased, negative = decreased.
+        Stored in audit_log for the Look Under the Hood graph.
+        """
+        current, previous = self._get_reliability_score(model_id)
+        new_score = max(0, min(100, current + delta))
+        try:
+            self._state.append("audit_log", {
+                "audit_id":          str(uuid.uuid4()),
+                "model_id":          model_id,
+                "event_type":        "score_update",
+                "score_before":      current,
+                "score_after":       new_score,
+                "verdict":           "correct" if delta >= 0 else "incorrect",
+                "correction_stored": False,
+                "query_preview":     reason[:60],
+                "created_at":        time.time(),
+            })
+        except Exception as e:
+            log.warning("Failed to record score event: %s", e)
+
+    async def _handle_correction(
+        self,
+        req: QueryRequest,
+        active_models: list[str],
+    ) -> RouterResponse | None:
+        """
+        Handle a user message that the trigger detector identified as a correction signal.
+
+        Extracts a structured correction, scores it, resolves scope, and stores it.
+        Returns a RouterResponse with an amber callout if stored successfully,
+        or None if extraction failed (caller falls through to normal routing).
+        """
+        from core.memory_extractor import MemoryExtractor
+        from core.scope_resolver import ResolutionAction
+
+        # Find the last AI response and original query from conversation history
+        history = req.conversation_history or []
+        last_ai_response = ""
+        original_query   = ""
+        for msg in reversed(history):
+            if msg.get("role") == "assistant" and not last_ai_response:
+                last_ai_response = msg.get("content", "")
+            if msg.get("role") == "user" and last_ai_response and not original_query:
+                original_query = msg.get("content", "")
+            if last_ai_response and original_query:
+                break
+
+        if not last_ai_response:
+            return None  # no prior AI response to correct — fall through
+
+        # Which model gave the last response?
+        corrected_model = active_models[0] if active_models else "unknown"
+
+        extractor = MemoryExtractor(backends=self._backends)
+        extraction = await extractor.extract(
+            user_message=req.query,
+            original_query=original_query or req.query,
+            ai_response=last_ai_response,
+            model_id=corrected_model,
+            active_project=req.conversation_id,
+        )
+
+        if not extraction:
+            return None
+
+        # Score the extraction
+        store_result = self._store_scorer.score(
+            extraction,
+            user_message=req.query,
+            original_query=original_query,
+            active_project=req.conversation_id,
+        )
+
+        if not store_result.should_store:
+            log.debug("Correction below store threshold (%.3f) — discarding", store_result.score)
+            return None
+
+        # Resolve scope and store
+        resolution = self._scope_resolver.resolve(
+            extraction,
+            active_project=req.conversation_id,
+        )
+
+        if resolution.action == ResolutionAction.PROMPT_USER:
+            # Return a response asking the user to confirm
+            return RouterResponse(
+                response=req.query,
+                primary_model="system",
+                all_models_used=[],
+                confidence_label="High",
+                callout_type="conflict",
+                callout_text=resolution.conflict_reason,
+                welfare_scores=None,
+                peer_review_used=False,
+                corrections_applied=[],
+                latency_ms=0.0,
+            )
+
+        # Store silently (AUTO_SAVE) or via review card (REVIEW_CARD)
+        stored = self._scope_resolver.apply(
+            resolution, extraction, active_project=req.conversation_id
+        )
+
+        # Penalize the model that was corrected
+        delta = extraction._score_delta()
+        if delta != 0:
+            self._update_model_score(corrected_model, delta=delta, reason=extraction.reason)
+
+        if stored:
+            callout_text = (
+                "Got it — I've saved that correction. "
+                "I'll apply it to future answers on this topic."
+            )
+            if store_result.decision.value == "review_card":
+                callout_text = (
+                    "Noted. Save this as a project correction? "
+                    "[This shows the review card in the UI]"
+                )
+            return RouterResponse(
+                response=callout_text,
+                primary_model="system",
+                all_models_used=[],
+                confidence_label="High",
+                callout_type="correction",
+                callout_text=None,
+                welfare_scores=None,
+                peer_review_used=False,
+                corrections_applied=[extraction.extraction_id],
+                latency_ms=0.0,
+            )
+
+        return None
 
     def _vcg_select(
         self,
@@ -319,37 +615,65 @@ class VeritasRouter:
     ) -> tuple[ModelResponse, str | None]:
         """
         Peer review round: have other models review the winner's answer.
-        Uses the cheapest available judge model.
-        Returns (confirmed_winner, disagreement_note | None).
+        Uses cheapest available judge. Judge sees its own reliability score
+        so it has an incentive to give accurate, honest reviews.
         """
+        from core.config import PEER_REVIEW_PROMPT
+
         review_prompt = PEER_REVIEW_PROMPT.format(
             query=query,
             answer=winner.text,
         )
 
-        # Pick cheapest available judge
         judge_model = self._pick_cheap_judge(exclude=winner.model_id)
         if not judge_model:
-            # No judge available — skip review
             return winner, None
 
-        try:
-            review_result = await self._call_model(
-                model_id=judge_model,
-                prompt=review_prompt,
-                domain="general",
-            )
-            review_text = review_result.text.lower()
+        # Inject reviewer system context so the judge knows it's being scored
+        reviewer_context = self._build_system_context(judge_model, is_reviewer=True)
 
-            if "incorrect" in review_text or ("partially_correct" in review_text and "issues" in review_text):
-                # Extract correction from review
-                correction_hint = review_result.text
+        try:
+            backend = self._backends.get(judge_model)
+            if not backend:
+                return winner, None
+
+            result = await backend.complete({
+                "model": judge_model,
+                "messages": [
+                    {"role": "system", "content": reviewer_context},
+                    {"role": "user",   "content": review_prompt},
+                ],
+                "temperature": 0.1,
+                "max_tokens": 400,
+            })
+            review_text = (
+                result.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+            )
+            review_lower = review_text.lower()
+
+            if "incorrect" in review_lower or (
+                "partially_correct" in review_lower and "issues" in review_lower
+            ):
+                # Penalize the winner model for being flagged
+                self._update_model_score(
+                    winner.model_id, delta=-5,
+                    reason="peer_review_flagged_incorrect"
+                )
+                # Reward the reviewer for catching an error
+                self._update_model_score(
+                    judge_model, delta=2,
+                    reason="peer_review_caught_error"
+                )
                 return winner, (
-                    f"One model flagged a potential issue with the answer. "
-                    f"The response was reviewed and may have limitations."
+                    "One model flagged a potential issue with this answer. "
+                    "The response was reviewed and may have limitations."
                 )
             else:
-                # Reviewer agreed
+                # Both agreed — reward both
+                self._update_model_score(winner.model_id, delta=1, reason="peer_review_confirmed")
+                self._update_model_score(judge_model, delta=1, reason="peer_review_confirmed_correctly")
                 return winner, None
 
         except Exception as e:
