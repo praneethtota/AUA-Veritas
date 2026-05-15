@@ -104,6 +104,11 @@ function startApiServer() {
   apiProcess.stdout.pipe(logStream)
   apiProcess.stderr.pipe(logStream)
 
+  // Also write startup info to log
+  logStream.write(`\n[${new Date().toISOString()}] Starting backend: ${pythonCmd}\n`)
+  logStream.write(`[${new Date().toISOString()}] Args: ${JSON.stringify(apiArgs)}\n`)
+  logStream.write(`[${new Date().toISOString()}] CWD: ${IS_DEV ? path.join(__dirname, '..') : resourcesPath}\n`)
+
   apiProcess.on('error', (err) => {
     console.error('API process error:', err)
   })

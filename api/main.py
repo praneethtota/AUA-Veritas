@@ -38,13 +38,25 @@ _router: VeritasRouter | None = None
 async def lifespan(app: FastAPI):
     global _router
     _router = VeritasRouter(db_path=str(db_path()))
-    # Load any models whose API keys are already in the keychain
-    for model_id, spec in SUPPORTED_MODELS.items():
-        key_name = PROVIDER_KEY_NAMES.get(spec["provider"])
-        if key_name:
+
+    # Read all keychain entries in one pass to avoid multiple password prompts.
+    # macOS asks for the keychain password once per process if we read sequentially.
+    keys_found: dict[str, str] = {}
+    for provider, key_name in PROVIDER_KEY_NAMES.items():
+        try:
             api_key = keyring.get_password(KEYCHAIN_SERVICE, key_name) or ""
             if api_key:
+                keys_found[provider] = api_key
+                log.info("Found keychain entry: %s", key_name)
+        except Exception as e:
+            log.warning("Keychain read failed for %s: %s", key_name, e)
+
+    # Load all found keys at once
+    for provider, api_key in keys_found.items():
+        for model_id, spec in SUPPORTED_MODELS.items():
+            if spec["provider"] == provider:
                 _router.load_backend(model_id, api_key)
+
     log.info("Veritas router started. Loaded models: %s", _router.loaded_models())
     yield
     log.info("Veritas shutting down")
