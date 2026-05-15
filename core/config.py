@@ -134,7 +134,7 @@ PROVIDER_KEY_NAMES: dict[str, str] = {
 }
 
 # High-stakes domains — skip automated retry, always add disclaimer callout
-HIGH_STAKES_DOMAINS = frozenset({"medicine", "legal", "finance", "aviation", "surgery"})
+HIGH_STAKES_DOMAINS = frozenset({"medical", "legal", "finance"})
 
 # Peer review prompt template
 PEER_REVIEW_PROMPT = """You are reviewing an AI-generated answer for accuracy.
