@@ -166,12 +166,18 @@ function createMainWindow() {
   })
 
   // Load the UI
-  if (IS_DEV) {
-    mainWindow.loadURL(`http://localhost:${UI_PORT}`)
-    // Open DevTools in dev mode
-    // mainWindow.webContents.openDevTools()
+  // In dev: try ui/dist first (already built); only use Vite if VITE_DEV env var is set
+  const distIndex = path.join(__dirname, '..', 'ui', 'dist', 'index.html')
+  if (!IS_DEV || !app.isPackaged) {
+    if (process.env.VITE_DEV === '1') {
+      mainWindow.loadURL(`http://localhost:${UI_PORT}`)
+    } else if (fs.existsSync(distIndex)) {
+      mainWindow.loadFile(distIndex)
+    } else {
+      mainWindow.loadURL(`http://localhost:${UI_PORT}`)
+    }
   } else {
-    mainWindow.loadFile(path.join(__dirname, '..', 'ui', 'dist', 'index.html'))
+    mainWindow.loadFile(distIndex)
   }
 
   mainWindow.once('ready-to-show', () => {
