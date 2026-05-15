@@ -12,8 +12,9 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import keyring
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from core.config import (
@@ -23,6 +24,8 @@ from core.config import (
     db_path,
 )
 from core.router import QueryRequest, VeritasRouter
+
+from fastapi.middleware.cors import CORSMiddleware
 
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("veritas.api")
@@ -48,6 +51,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="AUA-Veritas", version="0.1.0", lifespan=lifespan)
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    log.error("Validation error: %s", exc.errors())
+    return JSONResponse(status_code=422, content={"detail": exc.errors(), "body": str(exc)})
 
 # Allow file:// (Electron loadFile), localhost Vite dev server, and null origin
 app.add_middleware(
@@ -139,10 +147,13 @@ async def list_models():
 
 class QueryPayload(BaseModel):
     query: str
-    conversation_id: str
+    conversation_id: str = "default"
     accuracy_level: str = "balanced"
     enabled_models: list[str] = []
     conversation_history: list[dict] = []
+
+    class Config:
+        extra = "allow"  # ignore unknown fields from UI
 
 
 @app.post("/query")
