@@ -34,28 +34,50 @@ log = logging.getLogger("veritas.api")
 _router: VeritasRouter | None = None
 
 
+# ── Single-entry keychain helpers ────────────────────────────────────────────
+# All API keys stored as ONE JSON blob under account "api-keys".
+# macOS asks for the keychain password exactly once per app launch.
+
+import json as _json
+
+KEYCHAIN_ACCOUNT = "api-keys"
+
+
+def _read_all_keys() -> dict[str, str]:
+    """Read all API keys from the single keychain blob. One prompt max."""
+    try:
+        blob = keyring.get_password(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT) or "{}"
+        return _json.loads(blob)
+    except Exception as e:
+        log.warning("Keychain read failed: %s", e)
+        return {}
+
+
+def _write_all_keys(keys: dict[str, str]) -> None:
+    """Write all API keys back as a single keychain blob."""
+    keyring.set_password(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, _json.dumps(keys))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global _router
     _router = VeritasRouter(db_path=str(db_path()))
 
-    # Read all keychain entries in one pass to avoid multiple password prompts.
-    # macOS asks for the keychain password once per process if we read sequentially.
-    keys_found: dict[str, str] = {}
-    for provider, key_name in PROVIDER_KEY_NAMES.items():
-        try:
-            api_key = keyring.get_password(KEYCHAIN_SERVICE, key_name) or ""
-            if api_key:
-                keys_found[provider] = api_key
-                log.info("Found keychain entry: %s", key_name)
-        except Exception as e:
-            log.warning("Keychain read failed for %s: %s", key_name, e)
-
-    # Load all found keys at once
-    for provider, api_key in keys_found.items():
+    # Read ALL keys in ONE keychain call → single password prompt on launch
+    all_keys = _read_all_keys()
+    for key_name, api_key in all_keys.items():
+        if not api_key:
+            continue
+        # Find which provider owns this key_name
+        provider = next(
+            (p for p, k in PROVIDER_KEY_NAMES.items() if k == key_name), None
+        )
+        if not provider:
+            continue
         for model_id, spec in SUPPORTED_MODELS.items():
             if spec["provider"] == provider:
                 _router.load_backend(model_id, api_key)
+        log.info("Loaded keys for provider: %s", provider)
 
     log.info("Veritas router started. Loaded models: %s", _router.loaded_models())
     yield
@@ -95,39 +117,44 @@ class ApiKeyRequest(BaseModel):
 
 @app.post("/keys/save")
 async def save_api_key(req: ApiKeyRequest):
-    """Save an API key to the OS keychain and load its models."""
+    """Save an API key into the single keychain JSON blob, load its models."""
     key_name = PROVIDER_KEY_NAMES.get(req.provider)
     if not key_name:
         raise HTTPException(400, f"Unknown provider: {req.provider}")
-    keyring.set_password(KEYCHAIN_SERVICE, key_name, req.api_key)
-    # Load all models for this provider
+    # Read current blob, update this key, write back — single keychain item
+    all_keys = _read_all_keys()
+    all_keys[key_name] = req.api_key
+    _write_all_keys(all_keys)
+    # Load models for this provider
     loaded = []
-    for model_id, spec in SUPPORTED_MODELS.items():
-        if spec["provider"] == req.provider:
-            success = _router.load_backend(model_id, req.api_key)
-            if success:
-                loaded.append(model_id)
+    if _router:
+        for model_id, spec in SUPPORTED_MODELS.items():
+            if spec["provider"] == req.provider:
+                if _router.load_backend(model_id, req.api_key):
+                    loaded.append(model_id)
     return {"saved": True, "loaded_models": loaded}
 
 
 @app.delete("/keys/{provider}")
 async def delete_api_key(provider: str):
-    """Remove an API key from the OS keychain."""
+    """Remove a provider's key from the keychain blob."""
     key_name = PROVIDER_KEY_NAMES.get(provider)
     if not key_name:
         raise HTTPException(400, f"Unknown provider: {provider}")
-    keyring.delete_password(KEYCHAIN_SERVICE, key_name)
+    all_keys = _read_all_keys()
+    all_keys.pop(key_name, None)
+    _write_all_keys(all_keys)
     return {"deleted": True}
 
 
 @app.get("/keys/status")
-async def key_status():
-    """Return which providers have API keys saved."""
-    status = {}
-    for provider, key_name in PROVIDER_KEY_NAMES.items():
-        key = keyring.get_password(KEYCHAIN_SERVICE, key_name)
-        status[provider] = bool(key)
-    return status
+async def get_key_status():
+    """Return which providers have keys stored."""
+    all_keys = _read_all_keys()
+    return {
+        provider: bool(all_keys.get(key_name, ""))
+        for provider, key_name in PROVIDER_KEY_NAMES.items()
+    }
 
 
 @app.post("/keys/test/{model_id}")
