@@ -79,10 +79,15 @@ export default function ChatLayout() {
     try {
       const modelMap = await listModels()
       setModels(modelMap)
-      const connected = Object.entries(modelMap)
-        .filter(([, m]) => (m as ModelInfo).connected && !(m as ModelInfo).is_cheap_judge)
-        .map(([id]) => id)
-      setEnabledModels(connected)
+      // Only auto-enable on first load (when enabledModels is still empty)
+      // After that, preserve user's manual selections
+      setEnabledModels(prev => {
+        if (prev.length > 0) return prev  // user already made selections — don't override
+        const connected = Object.entries(modelMap)
+          .filter(([, m]) => (m as ModelInfo).connected && !(m as ModelInfo).is_cheap_judge)
+          .map(([id]) => id)
+        return connected.slice(0, 1)  // auto-enable only the first connected model
+      })
     } catch {}
   }
 
