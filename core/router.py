@@ -516,7 +516,17 @@ class VeritasRouter:
         if not last_ai_response:
             return None  # no prior AI response to correct — fall through
 
-        # Which model gave the last response?
+        # Never treat system-generated error messages as corrections.
+        # The spaCy classifier scores these at 1.0 (the word "failed/unavailable"
+        # looks like correction language). This guard prevents garbage memory storage.
+        _SYSTEM_PREFIXES = (
+            "All selected models are temporarily unavailable",
+            "All selected models",
+            "No AI models are connected",
+        )
+        if any(last_ai_response.startswith(p) for p in _SYSTEM_PREFIXES):
+            log.debug("Skipping correction pipeline — last response was a system error message")
+            return None
         corrected_model = active_models[0] if active_models else "unknown"
 
         extractor = MemoryExtractor(backends=self._backends)
