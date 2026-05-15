@@ -1,0 +1,56 @@
+{
+  "name": "aua-veritas",
+  "version": "0.1.0",
+  "description": "AUA-Veritas — AI assistant with cross-model verification",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "concurrently \"npm run ui:dev\" \"wait-on http://localhost:47822 && electron .\"",
+    "electron": "electron .",
+    "ui:dev": "cd ui && npm run dev",
+    "ui:build": "cd ui && npm run build",
+    "api": "uvicorn api.main:app --port 47821 --reload",
+    "build": "npm run ui:build && electron-builder",
+    "pack": "electron-builder --dir"
+  },
+  "keywords": ["ai", "assistant", "verification", "vcg"],
+  "license": "GPL-3.0",
+  "devDependencies": {
+    "concurrently": "^8.2.0",
+    "electron": "^30.0.0",
+    "electron-builder": "^24.13.0",
+    "wait-on": "^7.2.0"
+  },
+  "dependencies": {
+    "keytar": "^7.9.0"
+  },
+  "build": {
+    "appId": "com.praneethtota.aua-veritas",
+    "productName": "AUA-Veritas",
+    "asar": true,
+    "files": [
+      "electron/**/*",
+      "ui/dist/**/*",
+      "!node_modules/**"
+    ],
+    "extraResources": [
+      {
+        "from": "venv",
+        "to": "venv",
+        "filter": ["**/*"]
+      }
+    ],
+    "mac": {
+      "category": "public.app-category.productivity",
+      "target": [{"target": "dmg", "arch": ["x64", "arm64"]}],
+      "icon": "assets/icon.icns"
+    },
+    "win": {
+      "target": [{"target": "nsis", "arch": ["x64"]}],
+      "icon": "assets/icon.ico"
+    },
+    "linux": {
+      "target": [{"target": "AppImage", "arch": ["x64"]}],
+      "icon": "assets/icon.png"
+    }
+  }
+}
