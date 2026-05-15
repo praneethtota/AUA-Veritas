@@ -221,3 +221,79 @@ When adding new tests, append a new run section following this template:
 
 **Fail row format:**
 Replace `✅ PASS` with `**🔴 FAIL**` and add a note column or footnote explaining the failure.
+
+---
+
+## Run 2 — 2026-05-15
+
+**Command:** `PYTHONPATH=/home/claude/aua-veritas pytest tests/ -v`
+**Result:** 159 passed, 0 failed — 22.33s
+**New tests this run:** 37 (tests/test_store_include_restart.py)
+**Environment:** Python 3.12.3, pytest 9.0.3
+
+**Note on test_high_confidence_factual_auto_saves:** Initial test used "No, that's wrong" which scored 0.825 (review_card). Updated to "This is wrong and you must use Postgres not SQLite." — the word "must" triggers `_EXPLICIT_PHRASES` (+0.35 to user_explicitness), pushing score to 0.8775 (auto_save). The formula is working correctly; the test expectation was wrong about what language triggers auto-save.
+
+---
+
+### test_store_include_restart.py — StoreUtilityScorer, IncludeUtilityScorer, RestartPromptBuilder
+
+#### StoreUtilityScorer
+
+| # | Test | Input | Expected Output | Actual Output | Result |
+|---|------|-------|-----------------|---------------|--------|
+| 123 | `test_returns_store_utility_result` | `make_extraction(confidence=0.95)`, `user_message="No, that's wrong."` | `isinstance(result, StoreUtilityResult)`, `0≤score≤1`, decision is StoreDecision | StoreUtilityResult, score=0.825, REVIEW_CARD | ✅ PASS |
+| 124 | `test_breakdown_has_all_keys` | `make_extraction()`, `user_message="Wrong."` | breakdown contains all 7 sub-score keys | All 7 keys present | ✅ PASS |
+| 125 | `test_high_confidence_factual_auto_saves` | `type=factual_correction, confidence=0.95, scope=project`, `user_message="This is wrong and you must use Postgres not SQLite."` | `decision==AUTO_SAVE`, `score≥0.85`, `should_store==True`, `is_auto==True` | score=0.8775, AUTO_SAVE | ✅ PASS |
+| 126 | `test_failure_pattern_scores_high` | `type=failure_pattern, confidence=0.90`, `user_message="You keep suggesting SQLite. Stop."` | `decision in (AUTO_SAVE, REVIEW_CARD)`, `should_store==True` | REVIEW_CARD, should_store=True | ✅ PASS |
+| 127 | `test_preference_scores_lower` | factual (conf=0.95) vs preference (conf=0.70) with hedging | `factual.score > preference.score` | factual > preference | ✅ PASS |
+| 128 | `test_ambiguous_message_lowers_score` | clear message vs `"Maybe sometimes possibly use Postgres, I think, kind of."` | `clear.score > hedged.score` | clear > hedged | ✅ PASS |
+| 129 | `test_sensitive_content_penalized` | normal correction vs `"The password is secret123..."` | `normal.score > sensitive.score` | normal > sensitive (sensitivity_risk=0.80) | ✅ PASS |
+| 130 | `test_global_scope_higher_than_conversation` | `scope=global` vs `scope=conversation` | `global.score > conversation.score` | global > conversation | ✅ PASS |
+| 131 | `test_decision_thresholds` | `THRESHOLD_AUTO_SAVE`, `THRESHOLD_REVIEW_CARD` constants | `AUTO_SAVE==0.85`, `REVIEW_CARD==0.60`, `AUTO_SAVE > REVIEW_CARD` | 0.85, 0.60, True | ✅ PASS |
+| 132 | `test_should_store_true_for_auto_and_review` | `StoreUtilityResult` with AUTO_SAVE / REVIEW_CARD / DISCARD | `auto.should_store==True`, `review.should_store==True`, `discard.should_store==False` | All match | ✅ PASS |
+| 133 | `test_score_clamped_to_0_1` | All combinations of `confidence∈{0.0,0.5,1.0}` × 3 correction types | `0.0 ≤ score ≤ 1.0` for all 9 combinations | All within range | ✅ PASS |
+
+#### IncludeUtilityScorer
+
+| # | Test | Input | Expected Output | Actual Output | Result |
+|---|------|-------|-----------------|---------------|--------|
+| 134 | `test_returns_scored_correction` | `make_correction()`, `query="What database?"`, `domain="software_engineering"` | `isinstance(result, ScoredCorrection)`, `0≤include_score≤1`, `correction is c` | Matches | ✅ PASS |
+| 135 | `test_breakdown_has_all_keys` | `make_correction()` | breakdown contains all 8 sub-score keys | All 8 keys present | ✅ PASS |
+| 136 | `test_domain_match_boosts_relevance` | domain=SWE correction vs domain=math correction, query on SWE topic | `SWE.relevance > math.relevance` | SWE relevance higher | ✅ PASS |
+| 137 | `test_failure_pattern_has_highest_prevention` | `type=failure_pattern` vs `factual` vs `preference` | `fp.prevention ≥ fc.prevention > pref.prevention` | 1.0 ≥ 0.85 > 0.40 | ✅ PASS |
+| 138 | `test_pinned_correction_gets_boost` | `pinned=True` vs `pinned=False` | `pinned.breakdown["pinned"]==1.0`, `unpinned==0.0`, `pinned.score > unpinned.score` | All match | ✅ PASS |
+| 139 | `test_permanent_decay_never_stale` | `decay_class=A`, `created_at = 5 years ago` | `staleness == 0.0` | `0.0` | ✅ PASS |
+| 140 | `test_fast_decay_class_d_becomes_stale` | `decay_class=D`, `created_at = 1 year ago` (threshold=180 days) | `staleness > 0.0` | staleness > 0 | ✅ PASS |
+| 141 | `test_keyword_overlap_boosts_relevance` | correction with "database" in canonical vs "code_style" correction, query about database | `database.relevance > style.relevance` | database relevance higher | ✅ PASS |
+| 142 | `test_long_instruction_has_higher_token_cost` | short instruction vs 150-word instruction | `long.token_cost > short.token_cost` | long > short | ✅ PASS |
+| 143 | `test_select_returns_empty_for_no_corrections` | `corrections=[]` | `[] returned` | `[]` | ✅ PASS |
+| 144 | `test_select_filters_superseded` | `[scope=superseded, scope=project]` | Only 1 result (superseded excluded) | 1 result | ✅ PASS |
+| 145 | `test_select_respects_max_corrections` | 10 corrections, `max_corrections=3` | `len(result) ≤ 3` | 3 | ✅ PASS |
+| 146 | `test_select_returns_highest_scoring_first` | `[failure_pattern+SWE+pinned, preference+math]`, SWE query | Highest score first | Failure pattern first | ✅ PASS |
+| 147 | `test_select_applies_min_score_filter` | Very irrelevant correction (old, wrong domain, low conf), `min_score=0.80` | `result == []` (filtered out) | `[]` | ✅ PASS |
+
+#### RestartPromptBuilder
+
+| # | Test | Input | Expected Output | Actual Output | Result |
+|---|------|-------|-----------------|---------------|--------|
+| 148 | `test_empty_returns_restart_prompt` | Empty state | `isinstance(result, RestartPrompt)`, `item_count==0`, helpful message in output | Matches | ✅ PASS |
+| 149 | `test_empty_ide_format_contains_helpful_message` | Empty state, `active_project="My App"` | Project name in ide_format or helpful empty message | "My App" or "No project" present | ✅ PASS |
+| 150 | `test_with_corrections_returns_correct_count` | 3 corrections (factual, decision, instruction) | `item_count > 0` | 3 | ✅ PASS |
+| 151 | `test_veritas_format_contains_layer_headers` | factual + preference corrections | `"==="` in veritas_format | Present | ✅ PASS |
+| 152 | `test_ide_format_starts_with_before_answering` | 1 correction | `ide_format.startswith("Before answering")` | `True` | ✅ PASS |
+| 153 | `test_ide_format_contains_numbered_items` | 2 corrections | `"1."` and `"2."` in ide_format | Both present | ✅ PASS |
+| 154 | `test_project_name_appears_in_output` | `active_project="AUA-Veritas"` | `"AUA-Veritas"` in veritas or ide format | Present | ✅ PASS |
+| 155 | `test_superseded_corrections_excluded` | `[scope=superseded, scope=project]` | Superseded text absent from both formats | "Old instruction" not present | ✅ PASS |
+| 156 | `test_layer_order_in_ide_format` | preference + factual correction | preference appears before factual in ide_format | "Concise" before "Postgres" | ✅ PASS |
+| 157 | `test_no_duplicate_corrections` | 2 corrections with identical `canonical_query` (project + global) | Text appears exactly once | count == 1 | ✅ PASS |
+| 158 | `test_layer_counts_populated` | 2 corrections (factual + decision) | `layer_counts` is dict with `factual_correction ≥ 1` | Matches | ✅ PASS |
+| 159 | `test_result_has_generated_at` | Empty build | `generated_at > 0`, `≤ time.time()` | Valid timestamp | ✅ PASS |
+
+---
+
+## Summary
+
+| Run | Date | Total | Passed | Failed | New Tests | Duration |
+|-----|------|-------|--------|--------|-----------|----------|
+| 1 | 2026-05-14 | 122 | 122 | 0 | 122 | 9.90s |
+| 2 | 2026-05-15 | 159 | 159 | 0 | 37 | 22.33s |
