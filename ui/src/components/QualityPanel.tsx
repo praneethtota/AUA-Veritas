@@ -4,10 +4,12 @@
 
 import { useState } from 'react'
 import type { QueryResponse, ModelInfo } from '../types'
+import MemoryPanel from './MemoryPanel'
 
 interface Props {
   response: QueryResponse | null
   models: Record<string, ModelInfo>
+  activeProject?: string
 }
 
 type Tab = 'quality' | 'memory'
@@ -163,24 +165,7 @@ function QualityTab({ response }: { response: QueryResponse | null }) {
   )
 }
 
-function MemoryTab() {
-  return (
-    <div style={{ flex: 1, overflowY: 'auto', padding: '16px 14px' }}>
-      <div style={{ fontSize: 13, color: '#9ca3af', lineHeight: 1.6 }}>
-        Project memories will appear here as you chat.
-        Corrections and decisions are captured automatically.
-      </div>
-      {/* Memory panel — full implementation in next phase */}
-      <div style={{ marginTop: 16, padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px dashed #e5e7eb' }}>
-        <div style={{ fontSize: 12, color: '#9ca3af', textAlign: 'center' }}>
-          Memory panel coming in Phase 2 polish
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export default function QualityPanel({ response, models }: Props) {
+export default function QualityPanel({ response, models, activeProject }: Props) {
   const [tab, setTab] = useState<Tab>('quality')
 
   return (
@@ -210,7 +195,7 @@ export default function QualityPanel({ response, models }: Props) {
       {tab === 'quality' ? (
         <QualityTab response={response} />
       ) : (
-        <MemoryTab />
+        <MemoryPanel activeProject={activeProject} />
       )}
     </div>
   )

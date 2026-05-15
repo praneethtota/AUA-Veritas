@@ -4,7 +4,13 @@ import { useState, useEffect, useCallback } from 'react'
 import Sidebar from './Sidebar'
 import ChatPanel from './ChatPanel'
 import QualityPanel from './QualityPanel'
-import { listConversations, createConversation, listModels, sendQuery, getMessages } from '../api'
+import SettingsPage from './SettingsPage'
+import AutoSaveToast, { type ToastMemory } from './AutoSaveToast'
+import type { PendingMemory } from './PassiveSaveCard'
+import {
+  listConversations, createConversation, listModels,
+  sendQuery, getMessages, listProjects, createProject,
+} from '../api'
 import type { Conversation, Message, AccuracyLevel, ModelInfo, QueryResponse } from '../types'
 
 export default function ChatLayout() {
@@ -17,29 +23,28 @@ export default function ChatLayout() {
   const [loading, setLoading] = useState(false)
   const [sessionCost, setSessionCost] = useState(0)
   const [lastResponse, setLastResponse] = useState<QueryResponse | null>(null)
+  const [projects, setProjects] = useState<{ project_id: string; name: string }[]>([])
+  const [activeProject, setActiveProject] = useState<string | undefined>(undefined)
+  const [showSettings, setShowSettings] = useState(false)
+  const [toastMemory, setToastMemory] = useState<ToastMemory | null>(null)
+  const [pendingMemories, setPendingMemories] = useState<PendingMemory[]>([])
 
-  // Load initial data
   useEffect(() => {
     loadConversations()
     loadModels()
+    loadProjects()
   }, [])
 
-  // Load messages when conversation changes
   useEffect(() => {
-    if (activeConvId) {
-      loadMessages(activeConvId)
-    } else {
-      setMessages([])
-    }
+    if (activeConvId) loadMessages(activeConvId)
+    else setMessages([])
   }, [activeConvId])
 
   const loadConversations = async () => {
     try {
       const convs = await listConversations()
       setConversations(convs)
-      if (convs.length > 0 && !activeConvId) {
-        setActiveConvId(convs[0].conversation_id)
-      }
+      if (convs.length > 0 && !activeConvId) setActiveConvId(convs[0].conversation_id)
     } catch {}
   }
 
@@ -47,18 +52,25 @@ export default function ChatLayout() {
     try {
       const modelMap = await listModels()
       setModels(modelMap)
-      // Auto-enable connected models
       const connected = Object.entries(modelMap)
-        .filter(([, m]) => (m as ModelInfo).connected)
+        .filter(([, m]) => (m as ModelInfo).connected && !(m as ModelInfo).is_cheap_judge)
         .map(([id]) => id)
       setEnabledModels(connected)
+    } catch {}
+  }
+
+  const loadProjects = async () => {
+    try {
+      const projs = await listProjects()
+      setProjects(projs)
+      if (projs.length > 0 && !activeProject) setActiveProject(projs[0].name)
     } catch {}
   }
 
   const loadMessages = async (convId: string) => {
     try {
       const msgs = await getMessages(convId)
-      setMessages(msgs.map(m => ({ ...m, timestamp: m.created_at * 1000 })))
+      setMessages(msgs.map((m: any) => ({ ...m, timestamp: (m.created_at || Date.now() / 1000) * 1000 })))
     } catch {}
   }
 
@@ -70,6 +82,28 @@ export default function ChatLayout() {
       setMessages([])
     } catch {}
   }
+
+  const handleNewProject = async (name: string) => {
+    try {
+      const proj = await createProject(name)
+      setProjects(prev => [...prev, proj])
+      setActiveProject(proj.name)
+    } catch {}
+  }
+
+  const handleSaveMemory = useCallback((memory: PendingMemory) => {
+    setPendingMemories(prev => prev.filter(m => m.id !== memory.id))
+    setToastMemory({
+      id: memory.id,
+      corrective_instruction: memory.corrective_instruction,
+      type: memory.type,
+      scope: memory.scope,
+    })
+  }, [])
+
+  const handleSkipMemory = useCallback((id: string) => {
+    setPendingMemories(prev => prev.filter(m => m.id !== id))
+  }, [])
 
   const handleSendMessage = useCallback(async (text: string) => {
     if (!text.trim() || loading) return
@@ -84,17 +118,12 @@ export default function ChatLayout() {
       } catch { return }
     }
 
-    // Add user message immediately
     const userMsg: Message = {
-      id: `user-${Date.now()}`,
-      role: 'user',
-      content: text,
-      timestamp: Date.now(),
+      id: `user-${Date.now()}`, role: 'user', content: text, timestamp: Date.now(),
     }
     setMessages(prev => [...prev, userMsg])
     setLoading(true)
 
-    // Build conversation history for correction context
     const history = messages.map(m => ({
       role: m.role === 'assistant' ? 'assistant' : 'user',
       content: m.content,
@@ -110,16 +139,12 @@ export default function ChatLayout() {
       })
 
       setLastResponse(response)
+      const callCount = Math.max(1, response.all_models_used?.length || 1)
+      const judgeCallCost = accuracy === 'maximum' ? (callCount - 1) * 0.001 : 0
+      setSessionCost(prev => prev + callCount * 0.01 + judgeCallCost)
 
-      // Estimate cost
-      const callCount = response.all_models_used?.length || 1
-      const perCall = 0.01 // rough estimate
-      setSessionCost(prev => prev + callCount * perCall)
-
-      // Add AI response
       const aiMsg: Message = {
-        id: `ai-${Date.now()}`,
-        role: 'assistant',
+        id: `ai-${Date.now()}`, role: 'assistant',
         content: response.response,
         models_used: response.all_models_used,
         accuracy_level: accuracy,
@@ -132,77 +157,86 @@ export default function ChatLayout() {
       }
       setMessages(prev => [...prev, aiMsg])
 
-      // Add callout if present
-      if (response.callout_type && response.callout_text) {
-        const calloutMsg: Message = {
-          id: `callout-${Date.now()}`,
-          role: 'callout',
-          content: response.callout_text,
-          callout_type: response.callout_type,
+      // System events
+      if (response.callout_type === 'correction' && response.corrections_applied?.length > 0) {
+        setToastMemory({
+          id: response.corrections_applied[0],
+          corrective_instruction: response.response,
+          type: 'factual_correction', scope: 'project',
+        })
+      } else if (response.callout_type && response.callout_text) {
+        setMessages(prev => [...prev, {
+          id: `callout-${Date.now()}`, role: 'callout' as const,
+          content: response.callout_text!, callout_type: response.callout_type!,
           timestamp: Date.now(),
-        }
-        setMessages(prev => [...prev, calloutMsg])
+        }])
       }
 
-      // Update conversation title with first message
-      if (conversations.find(c => c.conversation_id === convId)?.title === 'New Chat') {
-        await loadConversations()
-      }
+      await loadConversations()
     } catch (err: any) {
-      const errorMsg: Message = {
-        id: `err-${Date.now()}`,
-        role: 'callout',
+      setMessages(prev => [...prev, {
+        id: `err-${Date.now()}`, role: 'callout' as const,
         content: `Something went wrong: ${err.message || 'Please try again.'}`,
-        callout_type: 'conflict',
-        timestamp: Date.now(),
-      }
-      setMessages(prev => [...prev, errorMsg])
+        callout_type: 'conflict' as const, timestamp: Date.now(),
+      }])
     } finally {
       setLoading(false)
     }
-  }, [activeConvId, accuracy, enabledModels, loading, messages, conversations])
+  }, [activeConvId, accuracy, enabledModels, loading, messages])
 
   return (
-    <div style={{
-      height: '100vh',
-      display: 'grid',
-      gridTemplateColumns: '240px 1fr 260px',
-      gridTemplateRows: '1fr',
-      overflow: 'hidden',
-      background: '#fafaf8',
-    }}>
-      {/* Left panel — Sidebar */}
-      <Sidebar
-        conversations={conversations}
-        activeConvId={activeConvId}
-        models={models}
-        enabledModels={enabledModels}
-        accuracy={accuracy}
-        sessionCost={sessionCost}
-        onSelectConversation={setActiveConvId}
-        onNewConversation={handleNewConversation}
-        onToggleModel={(modelId) => {
-          setEnabledModels(prev =>
-            prev.includes(modelId)
-              ? prev.filter(m => m !== modelId)
-              : [...prev, modelId]
-          )
-        }}
-        onAccuracyChange={setAccuracy}
+    <>
+      <div style={{
+        height: '100vh',
+        display: 'grid',
+        gridTemplateColumns: '240px 1fr 260px',
+        overflow: 'hidden',
+        background: '#fafaf8',
+      }}>
+        <Sidebar
+          conversations={conversations}
+          activeConvId={activeConvId}
+          models={models}
+          enabledModels={enabledModels}
+          accuracy={accuracy}
+          sessionCost={sessionCost}
+          projects={projects}
+          activeProject={activeProject}
+          onSelectConversation={setActiveConvId}
+          onNewConversation={handleNewConversation}
+          onToggleModel={modelId => setEnabledModels(prev =>
+            prev.includes(modelId) ? prev.filter(m => m !== modelId) : [...prev, modelId]
+          )}
+          onAccuracyChange={setAccuracy}
+          onSelectProject={setActiveProject}
+          onNewProject={handleNewProject}
+          onOpenSettings={() => setShowSettings(true)}
+        />
+
+        <ChatPanel
+          messages={messages}
+          loading={loading}
+          pendingMemories={pendingMemories}
+          onSend={handleSendMessage}
+          onSaveMemory={handleSaveMemory}
+          onSkipMemory={handleSkipMemory}
+        />
+
+        <QualityPanel
+          response={lastResponse}
+          models={models}
+          activeProject={activeProject}
+        />
+      </div>
+
+      <AutoSaveToast
+        memory={toastMemory}
+        onUndo={() => setToastMemory(null)}
+        onEdit={() => setToastMemory(null)}
+        onDismiss={() => setToastMemory(null)}
       />
 
-      {/* Centre panel — Chat */}
-      <ChatPanel
-        messages={messages}
-        loading={loading}
-        onSend={handleSendMessage}
-      />
-
-      {/* Right panel — Quality */}
-      <QualityPanel
-        response={lastResponse}
-        models={models}
-      />
-    </div>
+      {showSettings && <SettingsPage onClose={() => setShowSettings(false)} />}
+    </>
   )
 }

@@ -1,8 +1,10 @@
 // ui/src/components/ChatPanel.tsx — Centre panel
 // 3-color message system: user box (dark) | AI response (light) | callout (amber)
+// Also renders passive save cards for medium-confidence memory candidates
 
 import { useRef, useEffect, useState } from 'react'
 import type { Message, CalloutType } from '../types'
+import PassiveSaveCard, { type PendingMemory } from './PassiveSaveCard'
 
 const CALLOUT_COLORS: Record<CalloutType, { bg: string; border: string; icon: string }> = {
   correction:    { bg: '#fffbeb', border: '#f59e0b', icon: '✓' },
@@ -16,7 +18,10 @@ const CALLOUT_COLORS: Record<CalloutType, { bg: string; border: string; icon: st
 interface Props {
   messages: Message[]
   loading: boolean
+  pendingMemories: PendingMemory[]
   onSend: (text: string) => void
+  onSaveMemory: (memory: PendingMemory) => void
+  onSkipMemory: (id: string) => void
 }
 
 function UserMessage({ content }: { content: string }) {
@@ -116,7 +121,7 @@ function TypingIndicator() {
   )
 }
 
-export default function ChatPanel({ messages, loading, onSend }: Props) {
+export default function ChatPanel({ messages, loading, pendingMemories, onSend, onSaveMemory, onSkipMemory }: Props) {
   const [input, setInput] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -177,6 +182,17 @@ export default function ChatPanel({ messages, loading, onSend }: Props) {
         })}
 
         {loading && <TypingIndicator />}
+
+        {/* Passive save cards for medium-confidence memories */}
+        {pendingMemories.map(memory => (
+          <PassiveSaveCard
+            key={memory.id}
+            memory={memory}
+            onSave={onSaveMemory}
+            onSkip={onSkipMemory}
+          />
+        ))}
+
         <div ref={endRef} />
       </div>
 

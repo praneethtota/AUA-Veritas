@@ -191,3 +191,138 @@ async def create_conversation(body: dict):
 @app.get("/conversations/{conv_id}/messages")
 async def get_messages(conv_id: str):
     return _router._state.query("messages", filters={"conversation_id": conv_id}, limit=500)
+
+
+# ── Memory (corrections) ──────────────────────────────────────────────────────
+
+@app.get("/memory")
+async def get_memories(project: str = None, user_id: str = "local"):
+    """Return stored corrections for a user, optionally filtered by project scope."""
+    if not _router:
+        return []
+    corrections = _router._state.query(
+        "corrections",
+        filters={"user_id": user_id},
+        limit=200,
+    )
+    # Exclude superseded
+    active = [c for c in corrections if c.get("scope") != "superseded"]
+    if project:
+        active = [c for c in active if c.get("scope") == "project"]
+    return active
+
+
+@app.patch("/memory/{correction_id}")
+async def update_memory(correction_id: str, body: dict):
+    """Update a correction (pin, edit instruction)."""
+    if not _router:
+        raise HTTPException(503, "Router not initialized")
+    try:
+        updates = []
+        params = []
+        if "pinned" in body:
+            updates.append("scope = ?")
+            params.append("project" if body["pinned"] else "project")
+        if "corrective_instruction" in body:
+            updates.append("corrective_instruction = ?")
+            params.append(body["corrective_instruction"])
+        if not updates:
+            return {"updated": False}
+        params.append(correction_id)
+        with _router._state._conn() as conn:
+            conn.execute(
+                f"UPDATE corrections SET {', '.join(updates)} WHERE correction_id = ?",
+                params,
+            )
+        # Handle pinned separately (custom column not in schema yet)
+        if "pinned" in body:
+            try:
+                with _router._state._conn() as conn:
+                    conn.execute(
+                        "ALTER TABLE corrections ADD COLUMN pinned INTEGER DEFAULT 0"
+                    )
+            except Exception:
+                pass
+            with _router._state._conn() as conn:
+                conn.execute(
+                    "UPDATE corrections SET pinned = ? WHERE correction_id = ?",
+                    (1 if body["pinned"] else 0, correction_id),
+                )
+        return {"updated": True}
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+@app.delete("/memory/{correction_id}")
+async def delete_memory(correction_id: str):
+    """Soft-delete a correction (set scope to superseded)."""
+    if not _router:
+        raise HTTPException(503, "Router not initialized")
+    _router._scope_resolver._delete_correction(correction_id)
+    return {"deleted": True}
+
+
+# ── Restart prompt ─────────────────────────────────────────────────────────────
+
+@app.get("/restart-prompt")
+async def get_restart_prompt(project: str = None, user_id: str = "local"):
+    """Generate a restart prompt from active project memories."""
+    if not _router:
+        return {"veritas_format": "", "ide_format": "", "item_count": 0, "layer_counts": {}}
+    from core.restart_prompt import RestartPromptBuilder
+    builder = RestartPromptBuilder(_router._state)
+    result = builder.build(
+        active_project=project,
+        user_id=user_id,
+        include_global=True,
+    )
+    return {
+        "project": result.project,
+        "veritas_format": result.veritas_format,
+        "ide_format": result.ide_format,
+        "item_count": result.item_count,
+        "layer_counts": result.layer_counts,
+    }
+
+
+# ── Projects ───────────────────────────────────────────────────────────────────
+
+@app.get("/projects")
+async def list_projects(user_id: str = "local"):
+    """List all projects for a user."""
+    if not _router:
+        return []
+    try:
+        return _router._state.query("projects", filters={"user_id": user_id}, limit=100)
+    except Exception:
+        # projects table might not exist yet — return empty
+        return []
+
+
+@app.post("/projects")
+async def create_project(body: dict, user_id: str = "local"):
+    """Create a new project."""
+    import uuid, time
+    if not _router:
+        raise HTTPException(503, "Router not initialized")
+    project_id = str(uuid.uuid4())
+    try:
+        # Create projects table if not exists
+        with _router._state._conn() as conn:
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS projects (
+                    project_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL DEFAULT 'local',
+                    name TEXT NOT NULL,
+                    created_at REAL NOT NULL
+                )
+            """)
+        _router._state.append("projects", {
+            "project_id": project_id,
+            "user_id": user_id,
+            "name": body.get("name", "New Project"),
+            "created_at": time.time(),
+        })
+    except Exception as e:
+        raise HTTPException(500, str(e))
+    return {"project_id": project_id, "name": body.get("name", "New Project")}
