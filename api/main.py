@@ -49,9 +49,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="AUA-Veritas", version="0.1.0", lifespan=lifespan)
 
+# Allow file:// (Electron loadFile), localhost Vite dev server, and null origin
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:47822"],  # Electron renderer
+    allow_origins=["*"],
+    allow_origin_regex=r"(http://localhost:\d+|file://.*|null)",
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -140,32 +142,40 @@ class QueryPayload(BaseModel):
     conversation_id: str
     accuracy_level: str = "balanced"
     enabled_models: list[str] = []
+    conversation_history: list[dict] = []
 
 
 @app.post("/query")
-async def route_query(payload: QueryPayload):
+async def route_query(payload: QueryPayload):  # noqa: C901
     """Route a user query through the selected models."""
     if not _router:
         raise HTTPException(503, "Router not initialized")
-    req = QueryRequest(
-        query=payload.query,
-        conversation_id=payload.conversation_id,
-        accuracy_level=payload.accuracy_level,
-        enabled_models=payload.enabled_models,
-    )
-    result = await _router.route(req)
-    return {
-        "response": result.response,
-        "primary_model": result.primary_model,
-        "all_models_used": result.all_models_used,
-        "confidence_label": result.confidence_label,
-        "callout_type": result.callout_type,
-        "callout_text": result.callout_text,
-        "welfare_scores": result.welfare_scores,
-        "peer_review_used": result.peer_review_used,
-        "corrections_applied": result.corrections_applied,
-        "latency_ms": result.latency_ms,
-    }
+    try:
+        req = QueryRequest(
+            query=payload.query,
+            conversation_id=payload.conversation_id,
+            accuracy_level=payload.accuracy_level,
+            enabled_models=payload.enabled_models,
+            conversation_history=payload.conversation_history,
+        )
+        result = await _router.route(req)
+        return {
+            "response": result.response,
+            "primary_model": result.primary_model,
+            "all_models_used": result.all_models_used,
+            "confidence_label": result.confidence_label,
+            "callout_type": result.callout_type,
+            "callout_text": result.callout_text,
+            "welfare_scores": result.welfare_scores,
+            "peer_review_used": result.peer_review_used,
+            "corrections_applied": result.corrections_applied,
+            "latency_ms": result.latency_ms,
+        }
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.exception("Query route error: %s", exc)
+        raise HTTPException(500, detail=str(exc))
 
 
 # ── Conversations ─────────────────────────────────────────────────────────────
