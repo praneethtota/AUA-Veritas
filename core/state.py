@@ -43,8 +43,9 @@ class VeritasState:
             )
 
     def append(self, table: str, record: dict) -> str:
-        """Insert a record, auto-generating an ID if not present."""
-        if "id" not in record and f"{table[:-1]}_id" not in record:
+        """Insert a record. Only auto-generates an ID if no *_id key is present."""
+        has_any_id = "id" in record or any(k.endswith("_id") for k in record)
+        if not has_any_id:
             id_key = f"{table[:-1]}_id" if table.endswith("s") else "id"
             record = {id_key: str(uuid.uuid4()), **record}
         record.setdefault("created_at", time.time())
