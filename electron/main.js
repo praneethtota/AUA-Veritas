@@ -40,10 +40,25 @@ function startApiServer() {
   let pythonCmd
   let apiArgs
 
-  if (IS_DEV) {
-    // Development: use system python/uvicorn
-    const venvPython = path.join(resourcesPath, 'venv', 'bin', 'python3')
-    pythonCmd = fs.existsSync(venvPython) ? venvPython : 'python3'
+  // Always prefer the built binary (works in both dev and production)
+  const binaryName = process.platform === 'win32' ? 'veritas-backend.exe' : 'veritas-backend'
+  const devBinary = path.join(resourcesPath, 'dist-backend', binaryName)
+
+  if (IS_DEV && fs.existsSync(devBinary)) {
+    // Dev with built binary — fastest, most reliable
+    pythonCmd = devBinary
+    apiArgs = []
+    if (process.platform !== 'win32') {
+      try { require('child_process').execSync(`chmod +x "${devBinary}"`) } catch (_) {}
+    }
+  } else if (IS_DEV) {
+    // Dev fallback: try .venv first, then system python
+    const venvPaths = [
+      path.join(resourcesPath, '.venv', 'bin', 'python3'),
+      path.join(resourcesPath, 'venv', 'bin', 'python3'),
+    ]
+    const venvPython = venvPaths.find(p => fs.existsSync(p))
+    pythonCmd = venvPython || 'python3'
     apiArgs = [
       '-m', 'uvicorn', 'api.main:app',
       '--port', String(API_PORT),
