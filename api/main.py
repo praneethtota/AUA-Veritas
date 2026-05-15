@@ -176,6 +176,7 @@ async def list_models():
     return {
         model_id: {
             **spec,
+            "model_id": model_id,
             "connected": model_id in loaded,
         }
         for model_id, spec in SUPPORTED_MODELS.items()
