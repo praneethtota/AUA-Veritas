@@ -3,13 +3,12 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 dist/
-build/
 .venv/
 venv/
 *.db
 *.log
 
-# PyInstaller build artifacts
+# PyInstaller build artifacts (keep source, exclude output)
 dist-backend/
 build/pyinstaller-work/
 
