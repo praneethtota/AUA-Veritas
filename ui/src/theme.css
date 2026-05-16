@@ -1,27 +1,158 @@
-/* Dark/light mode CSS variables — applied via [data-theme] on <html> */
-:root,[data-theme="light"]{
-  --bg-primary:#fafaf8;--bg-secondary:#f5f5f2;--bg-surface:#ffffff;--bg-hover:#f0f0ec;--bg-active:#e8e8f0;
-  --border:#e5e7eb;--border-light:#f3f4f6;
-  --text-primary:#111827;--text-secondary:#6b7280;--text-muted:#9ca3af;--text-disabled:#d1d5db;
-  --accent:#4338ca;--accent-hover:#3730a3;--accent-subtle:#ede9fe;--accent-text:#5b21b6;
-  --success:#059669;--success-bg:#d1fae5;--warning:#f59e0b;--warning-bg:#fef3c7;--error:#ef4444;--error-bg:#fee2e2;
-  --sidebar-bg:#f5f5f2;--sidebar-border:#e5e7eb;
-  --user-bubble-bg:#1f2937;--user-bubble-text:#ffffff;--ai-card-bg:#ffffff;--ai-card-border:#e5e7eb;
-  --input-bg:#ffffff;--input-border:#e5e7eb;--input-focus:#4338ca;
-  --overlay:rgba(0,0,0,0.4);--scrollbar-thumb:#d1d5db;
+/* ui/src/theme.css
+   CSS custom properties for light and dark mode.
+   Applied via [data-theme="dark"] on <html>.
+   All component inline styles reference these vars.
+*/
+
+:root,
+[data-theme="light"] {
+  /* Backgrounds */
+  --bg-primary:    #fafaf8;
+  --bg-secondary:  #f5f5f2;
+  --bg-surface:    #ffffff;
+  --bg-hover:      #f0f0ec;
+  --bg-active:     #e8e8f0;
+
+  /* Borders */
+  --border:        #e5e7eb;
+  --border-light:  #f3f4f6;
+
+  /* Text */
+  --text-primary:   #111827;
+  --text-secondary: #6b7280;
+  --text-muted:     #9ca3af;
+  --text-disabled:  #d1d5db;
+
+  /* Accent (indigo) */
+  --accent:         #4338ca;
+  --accent-hover:   #3730a3;
+  --accent-subtle:  #ede9fe;
+  --accent-text:    #5b21b6;
+
+  /* Semantic */
+  --success:        #059669;
+  --success-bg:     #d1fae5;
+  --warning:        #f59e0b;
+  --warning-bg:     #fef3c7;
+  --error:          #ef4444;
+  --error-bg:       #fee2e2;
+
+  /* Sidebar */
+  --sidebar-bg:     #f5f5f2;
+  --sidebar-border: #e5e7eb;
+
+  /* Chat */
+  --user-bubble-bg:   #1f2937;
+  --user-bubble-text: #ffffff;
+  --ai-card-bg:       #ffffff;
+  --ai-card-border:   #e5e7eb;
+
+  /* Callout */
+  --callout-correction-bg:    #fffbeb;
+  --callout-correction-border: #f59e0b;
+  --callout-highstakes-bg:    #fff1f2;
+  --callout-highstakes-border: #ef4444;
+  --callout-crosscheck-bg:    #f0fdf4;
+  --callout-crosscheck-border: #22c55e;
+  --callout-disagreement-bg:  #fff7ed;
+  --callout-disagreement-border: #f97316;
+
+  /* Input */
+  --input-bg:       #ffffff;
+  --input-border:   #e5e7eb;
+  --input-focus:    #4338ca;
+
+  /* Modal overlay */
+  --overlay:        rgba(0, 0, 0, 0.4);
+
+  /* Scrollbar */
+  --scrollbar-thumb: #d1d5db;
+  --scrollbar-track: transparent;
 }
-[data-theme="dark"]{
-  --bg-primary:#0f0f11;--bg-secondary:#18181b;--bg-surface:#1c1c21;--bg-hover:#27272a;--bg-active:#2d2d36;
-  --border:#2d2d36;--border-light:#27272a;
-  --text-primary:#f4f4f5;--text-secondary:#a1a1aa;--text-muted:#71717a;--text-disabled:#3f3f46;
-  --accent:#6366f1;--accent-hover:#818cf8;--accent-subtle:#1e1b4b;--accent-text:#a5b4fc;
-  --success:#34d399;--success-bg:#064e3b;--warning:#fbbf24;--warning-bg:#451a03;--error:#f87171;--error-bg:#450a0a;
-  --sidebar-bg:#18181b;--sidebar-border:#2d2d36;
-  --user-bubble-bg:#3730a3;--user-bubble-text:#e0e7ff;--ai-card-bg:#1c1c21;--ai-card-border:#2d2d36;
-  --input-bg:#27272a;--input-border:#3f3f46;--input-focus:#6366f1;
-  --overlay:rgba(0,0,0,0.7);--scrollbar-thumb:#3f3f46;
+
+[data-theme="dark"] {
+  /* Backgrounds */
+  --bg-primary:    #0f0f11;
+  --bg-secondary:  #18181b;
+  --bg-surface:    #1c1c21;
+  --bg-hover:      #27272a;
+  --bg-active:     #2d2d36;
+
+  /* Borders */
+  --border:        #2d2d36;
+  --border-light:  #27272a;
+
+  /* Text */
+  --text-primary:   #f4f4f5;
+  --text-secondary: #a1a1aa;
+  --text-muted:     #71717a;
+  --text-disabled:  #3f3f46;
+
+  /* Accent */
+  --accent:         #6366f1;
+  --accent-hover:   #818cf8;
+  --accent-subtle:  #1e1b4b;
+  --accent-text:    #a5b4fc;
+
+  /* Semantic */
+  --success:        #34d399;
+  --success-bg:     #064e3b;
+  --warning:        #fbbf24;
+  --warning-bg:     #451a03;
+  --error:          #f87171;
+  --error-bg:       #450a0a;
+
+  /* Sidebar */
+  --sidebar-bg:     #18181b;
+  --sidebar-border: #2d2d36;
+
+  /* Chat */
+  --user-bubble-bg:   #3730a3;
+  --user-bubble-text: #e0e7ff;
+  --ai-card-bg:       #1c1c21;
+  --ai-card-border:   #2d2d36;
+
+  /* Callout */
+  --callout-correction-bg:     #2d2408;
+  --callout-correction-border: #d97706;
+  --callout-highstakes-bg:     #2d0a0a;
+  --callout-highstakes-border: #dc2626;
+  --callout-crosscheck-bg:     #052e16;
+  --callout-crosscheck-border: #16a34a;
+  --callout-disagreement-bg:   #2d1500;
+  --callout-disagreement-border: #ea580c;
+
+  /* Input */
+  --input-bg:       #27272a;
+  --input-border:   #3f3f46;
+  --input-focus:    #6366f1;
+
+  /* Modal overlay */
+  --overlay:        rgba(0, 0, 0, 0.7);
+
+  /* Scrollbar */
+  --scrollbar-thumb: #3f3f46;
+  --scrollbar-track: transparent;
 }
-*,*::before,*::after{box-sizing:border-box;}
-body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg-primary);color:var(--text-primary);-webkit-font-smoothing:antialiased;}
-::-webkit-scrollbar{width:6px;height:6px;}
-::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:3px;}
+
+/* Base reset */
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* Smooth theme transition */
+*, *::before, *::after {
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
