@@ -658,3 +658,102 @@ async def get_usage():
     except Exception as e:
         log.error("usage endpoint error: %s", e)
         return {"models": [], "total_cost": 0, "total_queries": 0}
+
+
+# ── Streaming query (Fast mode SSE) ──────────────────────────────────────────
+
+from fastapi.responses import StreamingResponse as _StreamingResponse
+
+
+@app.post("/query/stream")
+async def stream_query(payload: QueryPayload):
+    """
+    Fast-mode streaming endpoint. Returns Server-Sent Events.
+    Streams tokens live as they arrive from the selected model.
+    Falls back gracefully if the backend does not support streaming.
+
+    SSE format:
+      data: {"type": "token", "text": "..."}
+      data: {"type": "done", "response": {...}}
+      data: [DONE]
+    """
+    if not _router:
+        raise HTTPException(503, "Router not initialized")
+
+    async def event_generator():
+        import json as _j
+        import time as _t
+        try:
+            # Pick first enabled non-judge model
+            loaded = set(_router.loaded_models())
+            enabled = [m for m in (payload.enabled_models or []) if m in loaded]
+            if not enabled:
+                enabled = [
+                    m for m in loaded
+                    if not SUPPORTED_MODELS.get(m, {}).get("is_cheap_judge", False)
+                ]
+            if not enabled:
+                yield f"data: {_j.dumps({'type': 'done', 'response': {'response': 'No models connected. Please add an API key in Settings.', 'primary_model': '', 'all_models_used': [], 'confidence_label': 'Uncertain', 'callout_type': None, 'callout_text': None, 'welfare_scores': None, 'peer_review_used': False, 'corrections_applied': [], 'latency_ms': 0}})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
+            model_id = enabled[0]
+            backend  = _router._backends.get(model_id)
+
+            if not backend or not hasattr(backend, "stream"):
+                # No stream() method — run full route, fake-stream result
+                req = QueryRequest(
+                    query=payload.query,
+                    conversation_id=payload.conversation_id,
+                    accuracy_level="fast",
+                    enabled_models=enabled,
+                    conversation_history=payload.conversation_history,
+                )
+                result = await _router.route(req)
+                yield f"data: {_j.dumps({'type': 'token', 'text': result.response})}\n\n"
+                yield f"data: {_j.dumps({'type': 'done', 'response': {'response': result.response, 'primary_model': result.primary_model, 'all_models_used': result.all_models_used, 'confidence_label': result.confidence_label, 'callout_type': result.callout_type, 'callout_text': result.callout_text, 'welfare_scores': result.welfare_scores, 'peer_review_used': result.peer_review_used, 'corrections_applied': result.corrections_applied, 'latency_ms': result.latency_ms}})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
+
+            # Build prompt with injected corrections
+            t0 = _t.time()
+            from core.field_classifier import FieldClassifier as _FC
+            domain_dist = _FC().classify(payload.query)
+            primary_domain = max(domain_dist, key=lambda k: domain_dist[k])
+            corrections = _router._memory.retrieve(query=payload.query, domain=primary_domain)
+            from core.include_utility import IncludeUtilityScorer as _IU
+            selected = _IU().select(
+                query=payload.query, domain=primary_domain,
+                corrections=corrections,
+                active_project=payload.conversation_id, max_corrections=5,
+            )
+            prompt = _router._build_prompt(payload.query, selected, primary_domain)
+
+            messages = []
+            for h in (payload.conversation_history or []):
+                if h.get("role") in ("user", "assistant"):
+                    messages.append({"role": h["role"], "content": h["content"]})
+            messages.append({"role": "user", "content": prompt})
+
+            full_text = ""
+            async for token in backend.stream({"messages": messages, "temperature": 0.7, "max_tokens": 2048}):
+                if token:
+                    full_text += token
+                    yield f"data: {_j.dumps({'type': 'token', 'text': token})}\n\n"
+
+            latency_ms = round((_t.time() - t0) * 1000, 1)
+            corr_ids = [c.get("correction_id", "") for c in selected]
+            yield f"data: {_j.dumps({'type': 'done', 'response': {'response': full_text, 'primary_model': model_id, 'all_models_used': [model_id], 'confidence_label': 'Medium', 'callout_type': None, 'callout_text': None, 'welfare_scores': None, 'peer_review_used': False, 'corrections_applied': corr_ids, 'latency_ms': latency_ms}})}\n\n"
+            yield "data: [DONE]\n\n"
+
+        except Exception as e:
+            log.exception("Stream error: %s", e)
+            import json as _je
+            yield f"data: {_je.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            yield "data: [DONE]\n\n"
+
+    return _StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

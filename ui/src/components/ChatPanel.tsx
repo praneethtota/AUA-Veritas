@@ -1,6 +1,7 @@
 // ui/src/components/ChatPanel.tsx — Centre panel
 // 3-color message system: user box (dark) | AI response (light) | callout (amber)
-// Also renders passive save cards for medium-confidence memory candidates
+// Fast mode: tokens stream live word by word
+// Balanced/High/Max: typing indicator then full response
 
 import { useRef, useEffect, useState } from 'react'
 import type { Message, CalloutType } from '../types'
@@ -18,6 +19,7 @@ const CALLOUT_COLORS: Record<CalloutType, { bg: string; border: string; icon: st
 interface Props {
   messages: Message[]
   loading: boolean
+  streamingContent: string          // live token buffer for Fast mode
   pendingMemories: PendingMemory[]
   onSend: (text: string) => void
   onSaveMemory: (memory: PendingMemory) => void
@@ -130,6 +132,29 @@ function CalloutMessage({ msg }: { msg: Message }) {
   )
 }
 
+function StreamingBubble({ content }: { content: string }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 4 }}>
+      <div style={{
+        maxWidth: '80%',
+        padding: '10px 14px', borderRadius: '4px 16px 16px 16px',
+        background: '#fff', border: '1px solid #e5e7eb',
+        fontSize: 14, lineHeight: 1.7, color: '#111827',
+        whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+      }}>
+        {content}
+        <span style={{
+          display: 'inline-block', width: 2, height: 14,
+          background: '#4338ca', marginLeft: 2, verticalAlign: 'text-bottom',
+          animation: 'blink 1s step-end infinite',
+        }} />
+        <style>{`@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
+      </div>
+    </div>
+  )
+}
+
 function TypingIndicator() {
   return (
     <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 12 }}>
@@ -155,7 +180,7 @@ function TypingIndicator() {
   )
 }
 
-export default function ChatPanel({ messages, loading, pendingMemories, onSend, onSaveMemory, onSkipMemory }: Props) {
+export default function ChatPanel({ messages, loading, streamingContent, pendingMemories, onSend, onSaveMemory, onSkipMemory }: Props) {
   const [input, setInput] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -215,7 +240,8 @@ export default function ChatPanel({ messages, loading, pendingMemories, onSend, 
           return null
         })}
 
-        {loading && <TypingIndicator />}
+        {loading && !streamingContent && <TypingIndicator />}
+        {streamingContent && <StreamingBubble content={streamingContent} />}
 
         {/* Passive save cards for medium-confidence memories */}
         {pendingMemories.map(memory => (

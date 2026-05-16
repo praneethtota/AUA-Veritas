@@ -11,7 +11,7 @@ import UsagePage from './UsagePage'
 import type { PendingMemory } from './PassiveSaveCard'
 import {
   listConversations, createConversation, listModels,
-  sendQuery, getMessages, listProjects, createProject,
+  sendQuery, streamQuery, getMessages, listProjects, createProject,
 } from '../api'
 import type { Conversation, Message, AccuracyLevel, ModelInfo, QueryResponse } from '../types'
 
@@ -28,6 +28,7 @@ export default function ChatLayout({ darkMode, onToggleDarkMode }: Props) {
   const [enabledModels, setEnabledModels] = useState<string[]>([])
   const [accuracy, setAccuracy] = useState<AccuracyLevel>('balanced')
   const [loading, setLoading] = useState(false)
+  const [streamingContent, setStreamingContent] = useState('')
   const [sessionCost, setSessionCost] = useState(0)
   const [lastResponse, setLastResponse] = useState<QueryResponse | null>(null)
   const [projects, setProjects] = useState<{ project_id: string; name: string }[]>([])
@@ -160,6 +161,7 @@ export default function ChatLayout({ darkMode, onToggleDarkMode }: Props) {
     }
     setMessages(prev => [...prev, userMsg])
     setLoading(true)
+    setStreamingContent('')
 
     const history = messages.map(m => ({
       role: m.role === 'assistant' ? 'assistant' : 'user',
@@ -167,50 +169,109 @@ export default function ChatLayout({ darkMode, onToggleDarkMode }: Props) {
     }))
 
     try {
-      const response = await sendQuery({
-        query: text,
-        conversation_id: convId!,
-        accuracy_level: accuracy,
-        enabled_models: enabledModels,
-        conversation_history: history,
-      })
+      // ── Fast mode: stream tokens live ──────────────────────────────────────
+      if (accuracy === 'fast') {
+        let fullText = ''
+        let finalResponse: QueryResponse | null = null
 
-      setLastResponse(response)
-      const callCount = Math.max(1, response.all_models_used?.length || 1)
-      const judgeCallCost = accuracy === 'maximum' ? (callCount - 1) * 0.001 : 0
-      setSessionCost(prev => prev + callCount * 0.01 + judgeCallCost)
-
-      const aiMsg: Message = {
-        id: `ai-${Date.now()}`, role: 'assistant',
-        content: response.response,
-        models_used: response.all_models_used,
-        accuracy_level: accuracy,
-        confidence: response.confidence_label,
-        welfare_scores: response.welfare_scores || undefined,
-        peer_review_used: response.peer_review_used,
-        corrections_applied: response.corrections_applied,
-        latency_ms: response.latency_ms,
-        timestamp: Date.now(),
-      }
-      setMessages(prev => [...prev, aiMsg])
-
-      // System events
-      if (response.callout_type === 'correction' && response.corrections_applied?.length > 0) {
-        setToastMemory({
-          id: response.corrections_applied[0],
-          corrective_instruction: response.response,
-          type: 'factual_correction', scope: 'project',
+        const stream = streamQuery({
+          query: text,
+          conversation_id: convId!,
+          enabled_models: enabledModels,
+          conversation_history: history,
         })
-      } else if (response.callout_type && response.callout_text) {
+
+        for await (const event of stream) {
+          if (event.type === 'token') {
+            fullText += event.text
+            setStreamingContent(fullText)
+          } else if (event.type === 'done') {
+            finalResponse = event.response as QueryResponse
+          }
+        }
+
+        setStreamingContent('')
+
+        const response = finalResponse || {
+          response: fullText,
+          primary_model: enabledModels[0] || '',
+          all_models_used: enabledModels.slice(0, 1),
+          confidence_label: 'Medium' as const,
+          callout_type: null,
+          callout_text: null,
+          welfare_scores: null,
+          peer_review_used: false,
+          corrections_applied: [],
+          latency_ms: 0,
+        }
+
+        setLastResponse(response)
+        setSessionCost(prev => prev + 0.01)
+
         setMessages(prev => [...prev, {
-          id: `callout-${Date.now()}`, role: 'callout' as const,
-          content: response.callout_text!, callout_type: response.callout_type!,
+          id: `ai-${Date.now()}`, role: 'assistant' as const,
+          content: response.response,
+          models_used: response.all_models_used,
+          accuracy_level: accuracy,
+          confidence: response.confidence_label,
+          latency_ms: response.latency_ms,
           timestamp: Date.now(),
         }])
+
+        if (response.callout_type && response.callout_text) {
+          setMessages(prev => [...prev, {
+            id: `callout-${Date.now()}`, role: 'callout' as const,
+            content: response.callout_text!, callout_type: response.callout_type!,
+            timestamp: Date.now(),
+          }])
+        }
+
+      } else {
+        // ── Balanced / High / Maximum: wait for full response ───────────────
+        const response = await sendQuery({
+          query: text,
+          conversation_id: convId!,
+          accuracy_level: accuracy,
+          enabled_models: enabledModels,
+          conversation_history: history,
+        })
+
+        setLastResponse(response)
+        const callCount = Math.max(1, response.all_models_used?.length || 1)
+        const judgeCallCost = accuracy === 'maximum' ? (callCount - 1) * 0.001 : 0
+        setSessionCost(prev => prev + callCount * 0.01 + judgeCallCost)
+
+        setMessages(prev => [...prev, {
+          id: `ai-${Date.now()}`, role: 'assistant' as const,
+          content: response.response,
+          models_used: response.all_models_used,
+          accuracy_level: accuracy,
+          confidence: response.confidence_label,
+          welfare_scores: response.welfare_scores || undefined,
+          peer_review_used: response.peer_review_used,
+          corrections_applied: response.corrections_applied,
+          latency_ms: response.latency_ms,
+          timestamp: Date.now(),
+        }])
+
+        if (response.callout_type === 'correction' && response.corrections_applied?.length > 0) {
+          setToastMemory({
+            id: response.corrections_applied[0],
+            corrective_instruction: response.response,
+            type: 'factual_correction', scope: 'project',
+          })
+        } else if (response.callout_type && response.callout_text) {
+          setMessages(prev => [...prev, {
+            id: `callout-${Date.now()}`, role: 'callout' as const,
+            content: response.callout_text!, callout_type: response.callout_type!,
+            timestamp: Date.now(),
+          }])
+        }
       }
 
       await loadConversations()
     } catch (err: any) {
+      setStreamingContent('')
       setMessages(prev => [...prev, {
         id: `err-${Date.now()}`, role: 'callout' as const,
         content: `Something went wrong: ${err.message || 'Please try again.'}`,
@@ -218,6 +279,7 @@ export default function ChatLayout({ darkMode, onToggleDarkMode }: Props) {
       }])
     } finally {
       setLoading(false)
+      setStreamingContent('')
     }
   }, [activeConvId, accuracy, enabledModels, loading, messages])
 
@@ -253,6 +315,7 @@ export default function ChatLayout({ darkMode, onToggleDarkMode }: Props) {
         <ChatPanel
           messages={messages}
           loading={loading}
+          streamingContent={streamingContent}
           pendingMemories={pendingMemories}
           onSend={handleSendMessage}
           onSaveMemory={handleSaveMemory}
