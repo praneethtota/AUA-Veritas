@@ -65,16 +65,17 @@ class ModelResponse:
 
 @dataclass
 class RouterResponse:
-    response: str                        # final answer text
-    primary_model: str                   # model that produced the winner
-    all_models_used: list[str]           # all models called in answer round
-    confidence_label: str                # "High" | "Medium" | "Uncertain"
-    callout_type: str | None             # None | "correction" | "crosscheck" | "disagreement" | "highstakes"
-    callout_text: str | None             # plain-language callout for the user
-    welfare_scores: dict[str, float] | None  # VCG scores per model (max/high only)
+    response: str
+    primary_model: str
+    all_models_used: list[str]
+    confidence_label: str
+    callout_type: str | None
+    callout_text: str | None
+    welfare_scores: dict[str, float] | None
     peer_review_used: bool
-    corrections_applied: list[str]       # correction IDs injected
+    corrections_applied: list[str]
     latency_ms: float
+    disagreement_options: list[dict] | None = None  # Phase 5.4
 
 
 class VeritasRouter:
@@ -277,6 +278,20 @@ class VeritasRouter:
         })
 
         total_ms = round((time.time() - t0) * 1000, 1)
+
+        # Phase 5.4: include all model responses when models disagreed
+        disagree_options = None
+        if disagreement_note and len(responses) >= 2:
+            from core.config import SUPPORTED_MODELS as _SM
+            disagree_options = [
+                {
+                    "model_id": r.model_id,
+                    "display_name": _SM.get(r.model_id, {}).get("display_name", r.model_id),
+                    "response": r.text,
+                }
+                for r in responses
+            ]
+
         return RouterResponse(
             response=winner.text,
             primary_model=winner.model_id,
@@ -288,6 +303,7 @@ class VeritasRouter:
             peer_review_used=peer_review_used,
             corrections_applied=correction_ids,
             latency_ms=total_ms,
+            disagreement_options=disagree_options,
         )
 
     # ── Internal helpers ──────────────────────────────────────────────────────
@@ -560,6 +576,40 @@ class VeritasRouter:
         if not extraction:
             return None
 
+        # ── 5.2: False correction prevention ─────────────────────────────────
+        # Validate factual corrections before storing. Preferences/instructions
+        # are stored as-is (user intent is king). Only factual_correction type
+        # gets the validation pass.
+        if extraction.type == "factual_correction" and self._backends:
+            judge = self._pick_cheap_judge(exclude=corrected_model)
+            if judge:
+                is_plausible = await self._validate_correction(
+                    correction=extraction.corrective_instruction,
+                    original_query=original_query or req.query,
+                    judge_model=judge,
+                )
+                if not is_plausible:
+                    log.info(
+                        "Correction validation failed — not storing: %s",
+                        extraction.corrective_instruction[:60],
+                    )
+                    return RouterResponse(
+                        response=(
+                            "⚠ That correction may not be accurate — I haven\'t saved it. "
+                            "If you\'re sure, rephrase starting with \"I know that...\" "
+                            "to override this check."
+                        ),
+                        primary_model="system",
+                        all_models_used=[],
+                        confidence_label="Uncertain",
+                        callout_type="conflict",
+                        callout_text=None,
+                        welfare_scores=None,
+                        peer_review_used=False,
+                        corrections_applied=[],
+                        latency_ms=0.0,
+                    )
+
         # Score the extraction
         store_result = self._store_scorer.score(
             extraction,
@@ -589,7 +639,21 @@ class VeritasRouter:
         )
 
         # Penalize the model that was corrected
+        # ── 5.3: Preference vs mistake scoring ─────────────────────────────────
+        # persistent_instruction and preference do NOT penalise on first occurrence.
+        # The model couldn't have known the preference existed yet.
         delta = extraction._score_delta()
+        if delta != 0 and extraction.type in ("persistent_instruction", "preference"):
+            already_corrected = self._model_has_prior_correction(
+                model_id=corrected_model,
+                canonical_query=extraction.canonical_query,
+            )
+            if not already_corrected:
+                log.debug(
+                    "Skipping score penalty for %s on first preference: %s",
+                    corrected_model, extraction.canonical_query,
+                )
+                delta = 0  # no penalty on first occurrence
         if delta != 0:
             self._update_model_score(corrected_model, delta=delta, reason=extraction.reason)
 
@@ -717,8 +781,69 @@ class VeritasRouter:
         for model_id, spec in SUPPORTED_MODELS.items():
             if spec.get("is_cheap_judge") and model_id in self._backends and model_id != exclude:
                 return model_id
-        # Fallback: any loaded model except winner
         for model_id in self._backends:
             if model_id != exclude:
                 return model_id
         return None
+
+    async def _validate_correction(
+        self,
+        correction: str,
+        original_query: str,
+        judge_model: str,
+    ) -> bool:
+        """
+        Phase 5.2: Validate a factual correction before storing.
+        Asks a cheap judge if the correction is factually plausible.
+        Returns True = store it, False = reject it.
+        Fails open (returns True) on error so corrections aren't silently lost.
+        """
+        backend = self._backends.get(judge_model)
+        if not backend:
+            return True
+
+        prompt = (
+            f"A user corrected an AI answer to this question:\n"
+            f"Question: {original_query[:300]}\n\n"
+            f"User correction: {correction[:400]}\n\n"
+            f"Is this correction factually accurate? Reply with exactly one word: "
+            f"YES if accurate, NO if wrong or highly questionable. Nothing else."
+        )
+        try:
+            result = await backend.complete({
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.0,
+                "max_tokens": 5,
+            })
+            answer = (
+                result.get("choices", [{}])[0]
+                .get("message", {})
+                .get("content", "")
+                .strip()
+                .upper()
+            )
+            log.debug("Correction validation: %r for: %s", answer, correction[:60])
+            return not answer.startswith("NO")
+        except Exception as e:
+            log.warning("Correction validation error: %s", e)
+            return True  # fail open
+
+    def _model_has_prior_correction(
+        self,
+        model_id: str,
+        canonical_query: str,
+    ) -> bool:
+        """
+        Phase 5.3 / 5.5: Check if a model has already been corrected on this topic.
+        Used to skip first-occurrence penalty for preferences (5.3) and avoid
+        repeat-penalising topics already corrected (5.5).
+        """
+        try:
+            corrections = self._state.query(
+                "corrections",
+                filters={"model_id": model_id, "canonical_query": canonical_query},
+                limit=1,
+            )
+            return len(corrections) > 0
+        except Exception:
+            return False

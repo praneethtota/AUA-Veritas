@@ -221,6 +221,7 @@ async def route_query(payload: QueryPayload):  # noqa: C901
             "peer_review_used": result.peer_review_used,
             "corrections_applied": result.corrections_applied,
             "latency_ms": result.latency_ms,
+            "disagreement_options": result.disagreement_options if hasattr(result, "disagreement_options") else None,
         }
     except HTTPException:
         raise

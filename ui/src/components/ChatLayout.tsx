@@ -252,6 +252,10 @@ export default function ChatLayout({ darkMode, onToggleDarkMode }: Props) {
           corrections_applied: response.corrections_applied,
           latency_ms: response.latency_ms,
           timestamp: Date.now(),
+          // Phase 5.4: attach disagreement options so the picker renders
+          disagreement_options: response.callout_type === 'disagreement' && response.disagreement_options
+            ? response.disagreement_options
+            : undefined,
         }])
 
         if (response.callout_type === 'correction' && response.corrections_applied?.length > 0) {
@@ -282,6 +286,24 @@ export default function ChatLayout({ darkMode, onToggleDarkMode }: Props) {
       setStreamingContent('')
     }
   }, [activeConvId, accuracy, enabledModels, loading, messages])
+
+  // Phase 5.4: user picks preferred answer when models disagreed
+  const handlePickDisagreement = useCallback(async (msgId: string, pickedModelId: string) => {
+    const msg = messages.find(m => m.id === msgId)
+    if (!msg?.disagreement_options) return
+    const picked = msg.disagreement_options.find(o => o.model_id === pickedModelId)
+    if (!picked) return
+    // Send a silent preference signal — framed as user preference, not factual claim
+    try {
+      await sendQuery({
+        query: `I prefer ${picked.display_name}'s approach on this topic. Going forward, weight answers like: ${picked.response.slice(0, 150)}`,
+        conversation_id: activeConvId || 'default',
+        accuracy_level: 'fast',
+        enabled_models: enabledModels,
+        conversation_history: [],
+      })
+    } catch { /* silent */ }
+  }, [messages, activeConvId, enabledModels])
 
   return (
     <>
@@ -320,6 +342,7 @@ export default function ChatLayout({ darkMode, onToggleDarkMode }: Props) {
           onSend={handleSendMessage}
           onSaveMemory={handleSaveMemory}
           onSkipMemory={handleSkipMemory}
+          onPickDisagreement={handlePickDisagreement}
         />
 
         <QualityPanel

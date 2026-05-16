@@ -4,7 +4,7 @@
 // Balanced/High/Max: typing indicator then full response
 
 import { useRef, useEffect, useState } from 'react'
-import type { Message, CalloutType } from '../types'
+import type { Message, CalloutType, DisagreementOption } from '../types'
 import PassiveSaveCard, { type PendingMemory } from './PassiveSaveCard'
 
 const CALLOUT_COLORS: Record<CalloutType, { bg: string; border: string; icon: string }> = {
@@ -19,11 +19,78 @@ const CALLOUT_COLORS: Record<CalloutType, { bg: string; border: string; icon: st
 interface Props {
   messages: Message[]
   loading: boolean
-  streamingContent: string          // live token buffer for Fast mode
+  streamingContent: string
   pendingMemories: PendingMemory[]
   onSend: (text: string) => void
   onSaveMemory: (memory: PendingMemory) => void
   onSkipMemory: (id: string) => void
+  onPickDisagreement: (msgId: string, pickedModelId: string) => void
+}
+
+// Phase 5.4 — pastel colors for each model's answer card
+const PASTEL_COLORS = [
+  { bg: '#f0f9ff', border: '#bae6fd', text: '#0369a1' },  // sky
+  { bg: '#f0fdf4', border: '#bbf7d0', text: '#166534' },  // green
+  { bg: '#fdf4ff', border: '#e9d5ff', text: '#7e22ce' },  // purple
+  { bg: '#fff7ed', border: '#fed7aa', text: '#9a3412' },  // orange
+]
+
+function DisagreementPicker({
+  msgId,
+  options,
+  onPick,
+}: {
+  msgId: string
+  options: DisagreementOption[]
+  onPick: (msgId: string, modelId: string) => void
+}) {
+  const [picked, setPicked] = useState<string | null>(null)
+
+  if (picked) {
+    return (
+      <div style={{
+        padding: '8px 12px', borderRadius: 8, background: '#f0fdf4',
+        border: '1px solid #bbf7d0', fontSize: 12, color: '#166534',
+        marginBottom: 8,
+      }}>
+        ✓ Preference saved — that model will be favoured on this topic.
+      </div>
+    )
+  }
+
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: '#9ca3af', marginBottom: 8, fontWeight: 600 }}>
+        Models disagreed — click the answer you prefer:
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {options.map((opt, i) => {
+          const palette = PASTEL_COLORS[i % PASTEL_COLORS.length]
+          return (
+            <div
+              key={opt.model_id}
+              onClick={() => {
+                setPicked(opt.model_id)
+                onPick(msgId, opt.model_id)
+              }}
+              style={{
+                padding: '10px 14px', borderRadius: 10, cursor: 'pointer',
+                background: palette.bg, border: `1.5px solid ${palette.border}`,
+                transition: 'all 0.15s',
+              }}
+            >
+              <div style={{ fontSize: 11, fontWeight: 700, color: palette.text, marginBottom: 5 }}>
+                {opt.display_name}
+              </div>
+              <div style={{ fontSize: 13, color: '#374151', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                {opt.response.slice(0, 400)}{opt.response.length > 400 ? '…' : ''}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
 }
 
 function UserMessage({ content }: { content: string }) {
@@ -180,7 +247,7 @@ function TypingIndicator() {
   )
 }
 
-export default function ChatPanel({ messages, loading, streamingContent, pendingMemories, onSend, onSaveMemory, onSkipMemory }: Props) {
+export default function ChatPanel({ messages, loading, streamingContent, pendingMemories, onSend, onSaveMemory, onSkipMemory, onPickDisagreement }: Props) {
   const [input, setInput] = useState('')
   const endRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -236,7 +303,18 @@ export default function ChatPanel({ messages, loading, streamingContent, pending
         {messages.map(msg => {
           if (msg.role === 'user')     return <UserMessage    key={msg.id} content={msg.content} />
           if (msg.role === 'callout')  return <CalloutMessage key={msg.id} msg={msg} />
-          if (msg.role === 'assistant') return <AssistantMessage key={msg.id} msg={msg} />
+          if (msg.role === 'assistant') return (
+            <div key={msg.id}>
+              <AssistantMessage msg={msg} />
+              {msg.disagreement_options && msg.disagreement_options.length > 1 && (
+                <DisagreementPicker
+                  msgId={msg.id}
+                  options={msg.disagreement_options}
+                  onPick={onPickDisagreement}
+                />
+              )}
+            </div>
+          )
           return null
         })}
 

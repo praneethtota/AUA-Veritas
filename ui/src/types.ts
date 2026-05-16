@@ -14,6 +14,12 @@ export type CalloutType =
 
 export type ConfidenceLabel = 'High' | 'Medium' | 'Uncertain'
 
+export interface DisagreementOption {
+  model_id: string
+  display_name: string
+  response: string
+}
+
 export interface Message {
   id: string
   role: MessageRole
@@ -27,6 +33,7 @@ export interface Message {
   corrections_applied?: string[]
   latency_ms?: number
   timestamp: number
+  disagreement_options?: DisagreementOption[]  // Phase 5.4: side-by-side picker
 }
 
 export interface Conversation {
@@ -66,6 +73,7 @@ export interface QueryResponse {
   peer_review_used: boolean
   corrections_applied: string[]
   latency_ms: number
+  disagreement_options?: DisagreementOption[]  // Phase 5.4
 }
 
 export interface Memory {
