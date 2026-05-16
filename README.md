@@ -6,6 +6,18 @@
 **License:** GPL-3.0  
 **Built on:** [AUA Framework](https://github.com/praneethtota/Adaptive-Utility-Agent)
 
+## Status: Work in Progress
+
+AUA Veritas is currently an active work in progress and is **not release-ready yet**.
+
+The current repository is meant to show the product direction, architecture, and early implementation. Some features are incomplete, some flows may break, and there are known bugs that still need to be fixed before a public release.
+
+Known issues and current bugs are being tracked in the docs folder:
+
+👉 [Bug Report](docs/bug_report.md)
+
+If you try the app locally, expect rough edges. Feedback, bug reports, and suggestions are welcome.
+
 ---
 
 ## What it does
