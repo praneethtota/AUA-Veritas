@@ -431,6 +431,183 @@ async def get_reliability():
         return []
 
 
+# ── Full analytics dashboard ─────────────────────────────────────────────────
+
+@app.get("/analytics")
+async def get_analytics():
+    """
+    Comprehensive analytics for the Look Under the Hood dashboard.
+    Returns model stats, confidence distribution, correction stats,
+    domain distribution, recent decision traces, and VCG data.
+    """
+    if not _router:
+        return {}
+    try:
+        from core.config import SUPPORTED_MODELS
+        import time as _time
+
+        runs   = _router._state.query("model_runs",  limit=5000)
+        audits = _router._state.query("audit_log",   limit=5000)
+        corrs  = _router._state.query("corrections",  limit=1000)
+        convs  = _router._state.query("conversations", limit=1000)
+
+        loaded = set(_router.loaded_models())
+
+        # ── Per-model stats ───────────────────────────────────────────────────
+        model_stats: dict[str, dict] = {}
+        for mid in SUPPORTED_MODELS:
+            model_stats[mid] = {
+                "model_id":     mid,
+                "display_name": SUPPORTED_MODELS[mid].get("display_name", mid),
+                "connected":    mid in loaded,
+                "is_judge":     SUPPORTED_MODELS[mid].get("is_cheap_judge", False),
+                "total_runs":   0,
+                "winner_count": 0,
+                "total_latency_ms": 0.0,
+                "welfare_scores":   [],
+                "confidence_scores": [],
+            }
+
+        for r in runs:
+            mid = r.get("model_id", "")
+            if mid not in model_stats:
+                continue
+            model_stats[mid]["total_runs"] += 1
+            if r.get("vcg_winner"):
+                model_stats[mid]["winner_count"] += 1
+            lat = r.get("latency_ms")
+            if lat:
+                model_stats[mid]["total_latency_ms"] += lat
+            ws = r.get("vcg_welfare_score")
+            if ws is not None:
+                model_stats[mid]["welfare_scores"].append(ws)
+            cs = r.get("confidence_score")
+            if cs is not None:
+                model_stats[mid]["confidence_scores"].append(cs)
+
+        models_out = []
+        for mid, s in model_stats.items():
+            if not s["connected"] and s["total_runs"] == 0:
+                continue
+            # Reliability score from audit_log
+            model_audits = [a for a in audits if a.get("model_id") == mid]
+            current_score = 70
+            if model_audits:
+                latest = max(model_audits, key=lambda a: a.get("created_at", 0))
+                current_score = latest.get("score_after", 70)
+            n = s["total_runs"] or 1
+            avg_ws = round(sum(s["welfare_scores"]) / len(s["welfare_scores"]), 3) if s["welfare_scores"] else None
+            avg_lat = round(s["total_latency_ms"] / n, 1) if s["total_runs"] else None
+            win_rate = round(s["winner_count"] / n * 100, 1) if s["total_runs"] else 0
+            # Score events for mini sparkline
+            events = sorted([a for a in audits if a.get("model_id") == mid],
+                            key=lambda a: a.get("created_at", 0))
+            trend = "flat"
+            if len(events) >= 2:
+                trend = ("up" if events[-1].get("score_after", 70) > events[-2].get("score_after", 70)
+                         else "down" if events[-1].get("score_after", 70) < events[-2].get("score_after", 70)
+                         else "flat")
+            models_out.append({
+                "model_id":       mid,
+                "display_name":   s["display_name"],
+                "connected":      s["connected"],
+                "is_judge":       s["is_judge"],
+                "reliability_score": current_score,
+                "trend":          trend,
+                "total_runs":     s["total_runs"],
+                "winner_count":   s["winner_count"],
+                "win_rate_pct":   win_rate,
+                "avg_latency_ms": avg_lat,
+                "avg_welfare_score": avg_ws,
+                "score_events":   events[-20:],  # last 20 for sparkline
+            })
+        models_out.sort(key=lambda m: -m["reliability_score"])
+
+        # ── Confidence distribution ───────────────────────────────────────────
+        winner_runs   = [r for r in runs if r.get("vcg_winner")]
+        conf_hi = conf_med = conf_lo = 0
+        for r in winner_runs:
+            cs = r.get("confidence_score", 0.5)
+            if cs >= 0.75:  conf_hi  += 1
+            elif cs >= 0.50: conf_med += 1
+            else:            conf_lo  += 1
+        total_answered = len(winner_runs) or 1
+
+        # ── Correction stats ──────────────────────────────────────────────────
+        active_corrs = [c for c in corrs if c.get("scope") != "superseded"]
+        corr_by_type: dict[str, int] = {}
+        corr_by_domain: dict[str, int] = {}
+        for c in active_corrs:
+            t = c.get("type", "unknown")
+            d = c.get("domain", "general")
+            corr_by_type[t]   = corr_by_type.get(t, 0) + 1
+            corr_by_domain[d] = corr_by_domain.get(d, 0) + 1
+
+        # ── Domain distribution ───────────────────────────────────────────────
+        domain_counts: dict[str, int] = {}
+        for r in winner_runs:
+            # infer domain from canonical_query of matching correction if possible
+            pass  # approximated from corrections
+        for c in corrs:
+            d = c.get("domain", "general")
+            domain_counts[d] = domain_counts.get(d, 0) + 1
+
+        # ── Recent decision traces (from model_runs, grouped by query_id) ─────
+        from itertools import groupby
+        query_groups: dict[str, list] = {}
+        for r in sorted(runs, key=lambda x: x.get("created_at", 0), reverse=True):
+            qid = r.get("query_id", "")
+            if qid:
+                query_groups.setdefault(qid, []).append(r)
+        recent_decisions = []
+        for qid, qruns in list(query_groups.items())[:15]:
+            winner = next((r for r in qruns if r.get("vcg_winner")), qruns[0] if qruns else {})
+            all_mids = [r.get("model_id", "") for r in qruns]
+            # Map corrections applied
+            corr_ids_raw = winner.get("corrections_applied", "[]")
+            try:
+                import ast
+                corr_ids = ast.literal_eval(corr_ids_raw) if isinstance(corr_ids_raw, str) else corr_ids_raw
+            except Exception:
+                corr_ids = []
+            applied_corrs = [c for c in corrs if c.get("correction_id") in corr_ids]
+            recent_decisions.append({
+                "query_id":           qid,
+                "created_at":         winner.get("created_at"),
+                "winner_model":       winner.get("model_id", ""),
+                "all_models":         list(dict.fromkeys(all_mids)),
+                "confidence_score":   winner.get("confidence_score"),
+                "vcg_welfare_score":  winner.get("vcg_welfare_score"),
+                "latency_ms":         winner.get("latency_ms"),
+                "corrections_applied": [{
+                    "type":  c.get("type"),
+                    "scope": c.get("scope"),
+                    "instruction": (c.get("corrective_instruction") or "")[:120],
+                } for c in applied_corrs],
+                "peer_review":        any(r.get("round") == "peer_review" for r in qruns),
+            })
+
+        # ── VCG welfare score distribution ────────────────────────────────────
+        all_welfare = [r.get("vcg_welfare_score") for r in runs if r.get("vcg_welfare_score") is not None]
+        welfare_avg = round(sum(all_welfare) / len(all_welfare), 3) if all_welfare else None
+        welfare_max = round(max(all_welfare), 3) if all_welfare else None
+        welfare_min = round(min(all_welfare), 3) if all_welfare else None
+
+        return {
+            "models":               models_out,
+            "confidence_dist":      {"high": conf_hi, "medium": conf_med, "uncertain": conf_lo, "total": total_answered},
+            "correction_stats":     {"total_active": len(active_corrs), "by_type": corr_by_type, "by_domain": corr_by_domain},
+            "domain_dist":          domain_counts,
+            "recent_decisions":     recent_decisions,
+            "welfare_summary":      {"avg": welfare_avg, "max": welfare_max, "min": welfare_min, "total_scored": len(all_welfare)},
+            "total_conversations":  len(convs),
+            "total_model_runs":     len(runs),
+        }
+    except Exception as e:
+        log.error("analytics error: %s", e, exc_info=True)
+        return {}
+
+
 # ── Usage statistics ──────────────────────────────────────────────────────────
 
 @app.get("/usage")
