@@ -848,7 +848,90 @@ to your device and never shared.
 
 ---
 
-### Phase 5 — Post-launch (ongoing)
+### Phase 5 — Correctness + Memory Integrity (post-launch, prioritised)
+**Goal:** Fix the known correctness gaps that affect trust in the memory system. These are things the README promises but that are currently broken or incomplete.
+
+**5.1 — Fast mode live streaming**
+The README explicitly states: "Fast mode can stream responses live." The SSE generator exists in `api.ts` but is not wired end to end in the app. In dev mode (uvicorn backend) streaming works at the network level but the Electron renderer doesn't consume it progressively. Wire the stream: `api.ts streamQuery()` → `ChatPanel` renders tokens as they arrive. Done condition: typing a question in Fast mode shows tokens appearing word by word, not a loading spinner then a full response.
+
+**5.2 — False correction prevention**
+Currently the app will store any user-typed statement that triggers the correction detector, including factually wrong ones (e.g. "There are two r's in strawberry"). Before storing, run the proposed correction through a validation pass:
+- If the correction contradicts a high-confidence fact verifiable by the model, surface a warning card: "This correction may be inaccurate — confirm?"
+- User can confirm anyway (it becomes a preference override) or cancel.
+- Done condition: the strawberry bug cannot happen silently. Incorrect corrections either get blocked or explicitly confirmed.
+
+**5.3 — Preference vs mistake distinction in scoring**
+The README states: "The model is not penalized the first time it misses a preference it did not know yet." Currently all correction types trigger the same score delta. Implement the distinction:
+- `persistent_instruction` and `preference` type corrections do NOT reduce the model's score on first occurrence. The model didn't know the preference existed.
+- Score penalty for preferences only applies on the second+ occurrence (model was told, then repeated the mistake).
+- `factual_correction` and `failure_pattern` types continue to penalise on first occurrence as now.
+- Done condition: a preference stored for the first time results in zero score change. Subsequent violations of that preference result in a score drop.
+
+**5.4 — Disagreement resolution UI**
+When models disagree (currently shows an amber callout), show the differing answers side by side in distinct pastel color cards. User clicks the answer they prefer.
+- The chosen answer becomes a preference correction injected to the OTHER models only (not the model that gave the preferred answer). Framed as "the user prefers this answer to yours" not "your answer was wrong".
+- Score: positive for picked model, negative for unpicked models.
+- Requires new `correction_models` relation table: `correction_id | model_id` — tracks which models a correction applies to. Prevents corrections from being injected into the model that was already correct.
+- Done condition: disagreement callout has expandable side-by-side view. Clicking an answer stores a targeted correction and updates scores appropriately.
+
+**5.5 — Do not repeat-penalise corrected topics**
+Once a model has been corrected on a specific topic and the correction is stored, do not reduce the model's score again on that exact topic in future queries unless expert verification overturns it. Track corrected topics per model via the `correction_models` table.
+- Done condition: a model corrected on topic X, and then later asked the same question again (with the correction injected), does not get penalised again even if it would have given the wrong answer without the injection.
+
+**5.6 — Per-provider [?] help modal in Settings**
+The README and old roadmap describe this: each provider in the Settings page has a `[?]` button that opens a step-by-step modal with numbered instructions, an "Open in browser ↗" button that opens the provider's API key page, the key format prefix, and a free tier callout where applicable. The current Settings page has only a "Get key →" link. Build the full modal per provider.
+- Done condition: clicking `?` next to any provider opens a modal with at least: numbered steps, clickable URL, key format hint, free tier note if applicable.
+
+---
+
+### Phase 6 — Context Continuity (seamless handoff)
+**Goal:** Deliver the "Continue where you left off" feature described as Section 2 of the README. This is one of the three core value propositions. It is not built at all.
+
+**6.1 — Shadow token counter**
+Track an estimated token count for each active conversation based on messages sent and received. Store per-conversation in SQLite. Each model's context window size is stored in `config.py` (already has `context_window` field in `SUPPORTED_MODELS`). Trigger a backup when the estimated token count exceeds 70% of the smallest connected model's context window.
+
+**6.2 — Context backup generation**
+When the backup threshold is reached:
+1. Ask the primary model (or cheapest available judge): "Summarise the key decisions, rules, corrections, and open tasks from this conversation in a numbered list. Max 500 tokens."
+2. Combine the model-generated summary with the project's active corrections from the memory store.
+3. Store the combined block as a `context_backup` record in SQLite, linked to the conversation.
+
+**6.3 — Seamless handoff**
+When the user sends the next message after a backup:
+1. Start a fresh underlying model session (new API call thread).
+2. Inject the stored context backup block as a system message at the top.
+3. Continue showing the same conversation window to the user — no visible break.
+4. Amber callout in chat: "Context window reached — I've refreshed your project memory to keep going."
+
+**6.4 — Inactivity-based backup**
+Also trigger a backup when the user is away for a configurable period. When they return, the backup is ready to inject.
+Default: automatic (app decides based on inactivity + context length change).
+User-configurable in Settings:
+- Automatic (default)
+- Every 15–20 minutes of inactivity
+- Hourly
+- Daily
+- Manual only (user triggers from Memory panel)
+- Off
+
+**6.5 — Look Under the Hood: context backup tracking**
+The README lists "context backups and refreshes" as visible in Look Under the Hood. Add a section to the dashboard's Overview tab:
+- Count of backups performed
+- Last backup timestamp per conversation
+- Tokens saved / context refreshes over time
+- Backup events visible in the Decisions tab as a distinct row type
+
+**6.6 — Settings UI for backup frequency**
+Add a "Context backup" section to the Settings page with the frequency selector and an explanation of what a backup does and what it costs in tokens.
+
+**6.7 — Deleted corrections not included in future backups**
+The README states: "If you delete a correction, Veritas will not include it in future context refreshes." This is already correct for the correction store (deleted = superseded scope), but must also be enforced in the backup generation prompt so deleted corrections are not re-injected via the backup block.
+
+- Done condition: A user can work in a long conversation, step away for a day, come back, and the app continues seamlessly in the same window with all prior context intact. The user never has to paste a restart prompt manually.
+
+---
+
+### Phase 7 — Post-launch (ongoing)
 - More model plugins as new frontier models release
 - Opt-in cross-user correction sharing (v2 feature)
 - Local model support via Ollama (fully offline)
@@ -933,13 +1016,15 @@ Every correction event writes two records:
 | Phase | Duration | End state |
 |---|---|---|
 | 0 — Foundation | 2 weeks ✅ | Repo, backend, 2 models, local storage |
-| 1 — Plugins + Continuity backend | 2 weeks | All 10 models + full memory pipeline |
-| 2 — Consumer UI + Memory UI | 4–5 weeks | Full app, all features, internal testing |
-| 3 — Packaging | 2 weeks | Mac .dmg and Windows .exe installers |
-| 4 — Polish | 2 weeks | Launch-ready |
-| **Total** | **~12–13 weeks** | v1.0 AUA-Veritas |
+| 1 — Plugins + Continuity backend | 2 weeks ✅ | All 10 models + full memory pipeline |
+| 2 — Consumer UI + Memory UI | 4–5 weeks ✅ | Full app, all features, internal testing |
+| 3 — Packaging | 2 weeks ✅ | Mac .dmg installer |
+| 4 — Polish | 2 weeks ✅ | Launch-ready |
+| 5 — Correctness + Memory Integrity | TBD | Streaming, false correction prevention, preference scoring, disagreement UI |
+| 6 — Context Continuity | TBD | Seamless context backup, inactivity handoff, configurable frequency |
+| 7 — Post-launch | Ongoing | New models, Ollama, sharing, mobile |
 
-*+1–2 weeks vs original estimate due to Continuity feature integration in Phase 1 and 2.*
+*Phases 5 and 6 address features explicitly promised in the README that are not yet built.*
 
 ---
 
