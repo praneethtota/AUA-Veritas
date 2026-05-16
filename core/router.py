@@ -580,7 +580,14 @@ class VeritasRouter:
         # Validate factual corrections before storing. Preferences/instructions
         # are stored as-is (user intent is king). Only factual_correction type
         # gets the validation pass.
-        if extraction.type == "factual_correction" and self._backends:
+        #
+        # Override: if the user starts their message with "I know that",
+        # skip validation entirely — explicit override.
+        _OVERRIDE_PREFIXES = ("i know that", "i know this", "trust me,", "override:")
+        user_lower = req.query.lower().strip()
+        user_force_store = any(user_lower.startswith(p) for p in _OVERRIDE_PREFIXES)
+
+        if extraction.type == "factual_correction" and self._backends and not user_force_store:
             judge = self._pick_cheap_judge(exclude=corrected_model)
             if judge:
                 is_plausible = await self._validate_correction(
@@ -595,9 +602,8 @@ class VeritasRouter:
                     )
                     return RouterResponse(
                         response=(
-                            "⚠ That correction may not be accurate — I haven\'t saved it. "
-                            "If you\'re sure, rephrase starting with \"I know that...\" "
-                            "to override this check."
+                            "⚠ That correction may not be accurate — I haven't saved it. "
+                            "Start your message with 'I know that...' to force-store it."
                         ),
                         primary_model="system",
                         all_models_used=[],
@@ -642,18 +648,29 @@ class VeritasRouter:
         # ── 5.3: Preference vs mistake scoring ─────────────────────────────────
         # persistent_instruction and preference do NOT penalise on first occurrence.
         # The model couldn't have known the preference existed yet.
+        # ── 5.5: No repeat-penalty on already-corrected topics ─────────────────
+        # If the model has already been corrected on this topic AND the correction
+        # was injected into the prompt (meaning the model was explicitly told),
+        # do NOT penalise again. The correction store already handles future queries.
+        # Penalising repeatedly for the same topic punishes the model for a mistake
+        # it can't avoid without the injection — not a reliable signal.
         delta = extraction._score_delta()
-        if delta != 0 and extraction.type in ("persistent_instruction", "preference"):
-            already_corrected = self._model_has_prior_correction(
-                model_id=corrected_model,
-                canonical_query=extraction.canonical_query,
+        already_corrected = self._model_has_prior_correction(
+            model_id=corrected_model,
+            canonical_query=extraction.canonical_query,
+        )
+        if already_corrected:
+            log.debug(
+                "Skipping score penalty for %s — already corrected on: %s",
+                corrected_model, extraction.canonical_query,
             )
-            if not already_corrected:
-                log.debug(
-                    "Skipping score penalty for %s on first preference: %s",
-                    corrected_model, extraction.canonical_query,
-                )
-                delta = 0  # no penalty on first occurrence
+            delta = 0  # 5.5: no repeat penalty
+        elif delta != 0 and extraction.type in ("persistent_instruction", "preference"):
+            log.debug(
+                "Skipping score penalty for %s on first preference: %s",
+                corrected_model, extraction.canonical_query,
+            )
+            delta = 0  # 5.3: no penalty on first occurrence of preference
         if delta != 0:
             self._update_model_score(corrected_model, delta=delta, reason=extraction.reason)
 
