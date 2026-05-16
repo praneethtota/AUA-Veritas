@@ -32,3 +32,18 @@ Thumbs.db
 
 # UI build output (rebuilt at package time)
 ui/dist/
+
+# One-time debug and recovery scripts
+diagnose.sh
+diagnose-corrections.sh
+fix-and-build.sh
+fix-diverged.sh
+hotfix.sh
+launch-electron.sh
+pull-latest.sh
+rebuild-backend.sh
+reset-and-launch.sh
+resume-build.sh
+update-and-launch.sh
+commit-untracked.sh
+cleanup-scripts.sh
