@@ -51,7 +51,7 @@ _NON_CORRECTION_PATTERNS = re.compile(
     r"(can you |could you |please )?(rewrite|summarize|translate|format|convert|refactor|rename|add|remove|sort|clean)"
     r"|what[\s']"          # what is / what's / what are
     r"|which\b"            # which database / which is / which would
-    r"|how (do|does|would|can|should)"
+    r"|how (do|does|would|can|should|many|much|long|far|often|old)\b"  # how many, how much, etc.
     r"|why (is|are|does|do)"
     r"|when (is|are|does|do)"
     r"|where (is|are|does|do)"

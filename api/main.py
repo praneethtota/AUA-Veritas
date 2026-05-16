@@ -270,7 +270,9 @@ async def get_memories(project: str = None, user_id: str = "local"):
     # Exclude superseded
     active = [c for c in corrections if c.get("scope") != "superseded"]
     if project:
-        active = [c for c in active if c.get("scope") == "project"]
+        # Show project-scoped corrections for this project AND global corrections
+        # (global corrections apply everywhere, so they belong in every project view)
+        active = [c for c in active if c.get("scope") in ("project", "global")]
     return active
 
 
