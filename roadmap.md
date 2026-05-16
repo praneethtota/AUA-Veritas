@@ -909,38 +909,38 @@ When the user sends the next message after a model's backup is ready:
 
 This means at any moment, different models in the same conversation may be at different stages of their context — one may be on its original thread, another may already be on its third refresh. The user sees none of this.
 
-**6.4 — Inactivity-based backup + invisibility rule**
-Also trigger a backup when the user is away for a configurable period. When they return, the backup is ready to inject on their next message.
-
-The entire backup system is invisible to the user. No prompts, no interruptions, no confirmation dialogs. The model handles everything silently in the background.
-
+**6.4 — Inactivity-based backup**
+Also trigger a backup when the user is away for a configurable period. When they return, the backup is ready to inject.
 Default: automatic (app decides based on inactivity + context length change).
+User-configurable in Settings:
+- Automatic (default)
+- Every 15–20 minutes of inactivity
+- Hourly
+- Daily
+- Manual only (user triggers from Memory panel)
+- Off
 
 **6.5 — Look Under the Hood: context backup tracking**
 The README lists "context backups and refreshes" as visible in Look Under the Hood. Add a section to the dashboard's Overview tab:
-- Count of backups performed per model
-- Last backup timestamp per model per conversation
-- Which models have been refreshed and how many times
+- Count of backups performed
+- Last backup timestamp per conversation
+- Tokens saved / context refreshes over time
 - Backup events visible in the Decisions tab as a distinct row type
-This is the ONLY place the user can see backup activity. It is not surfaced in the main chat window.
 
-**6.6 — Settings UI: Context backup toggle (opt-out)**
-A dedicated "Context backup" section in Settings — separate from API keys. Feature is on by default. Opt-out not opt-in: the feature only has value if it runs automatically.
-
-Before the toggle, show:
-- Token cost notice: "Each backup uses ~500 tokens per model. With 3 models, a backup event costs ~1,500 tokens."
-- Privacy notice: "Backup summaries are sent to your model providers as normal API calls, subject to their privacy terms. Turn off if you do not want conversation summaries sent externally."
-
-Controls:
-- On / Off toggle (default: On)
-- Frequency selector (shown only when On): Automatic / Every 15-20 min / Hourly / Daily / Manual only
-
-No other UI surfaces the backup system.
+**6.6 — Settings UI for backup frequency**
+Add a "Context backup" section to the Settings page with the frequency selector and an explanation of what a backup does and what it costs in tokens.
 
 **6.7 — Deleted corrections not included in future backups**
 The README states: "If you delete a correction, Veritas will not include it in future context refreshes." This is already correct for the correction store (deleted = superseded scope), but must also be enforced in the backup generation prompt so deleted corrections are not re-injected via the backup block.
 
-- Done condition: A user can work in a long conversation, step away for a day, come back, and the app continues seamlessly in the same window with all prior context intact. The user never has to paste a restart prompt manually.
+**6.8 — Rolling backups, not one-shot**
+The 70% threshold triggers the first backup, but backups continue rolling for as long as the conversation lives. After a model is refreshed on a new thread, a fresh token counter starts for that model's new thread. When that thread also hits 70%, a new backup is generated and stored as a new row with a later timestamp. The router always injects the most recent backup for each model.
+
+Additionally, a periodic backup runs every 20 messages regardless of token count. This keeps the backup fresh throughout a long conversation rather than relying solely on the context-limit trigger. A model on its third refresh thread, 200 messages in, will have a backup that reflects those 200 messages — not just the original handoff summary.
+
+The `context_backups` table is append-only. Old rows are never deleted — they form an audit trail of how the context evolved. Only the most recent row per `(model_id, conversation_id)` is injected.
+
+- Done condition: A user can work in a long conversation, step away for a day, come back, and the app continues seamlessly in the same window with all prior context intact. The user never has to paste a restart prompt manually. If the conversation runs for 1,000 messages across multiple context refreshes, the injected backup at any point reflects the most recent 20-message snapshot, not the original session summary.
 
 ---
 

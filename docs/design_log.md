@@ -180,4 +180,18 @@ No other UI. The user never sees backup events happening, which models have been
 
 ---
 
+### 2026-05-16 — Rolling backups every 20 messages, not one-shot at 70%
+
+**[DESIGN]** Context backups are not a one-shot event at the 70% context threshold. They roll continuously for the life of the conversation.
+
+Two triggers, both running in parallel per model:
+1. **Token threshold** — when a model's estimated token count hits 70% of its context window. After a refresh, the counter resets for the new thread and triggers again at 70% of that thread.
+2. **Message count** — every 20 messages regardless of token count. Keeps the backup fresh throughout a long conversation.
+
+The `context_backups` table is append-only. Each backup is a new row. Old rows are never deleted — they are an audit trail. The router always injects the single most recent row for `(model_id, conversation_id)`.
+
+Result: a model on its third refresh thread, 200 messages into that thread, has a backup that reflects those 200 messages — not the original session summary from before the first refresh.
+
+---
+
 *End of log. New entries go at the bottom.*
