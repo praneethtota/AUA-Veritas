@@ -233,13 +233,15 @@ class VeritasRouter:
             callout_type = "disagreement"
             callout_text = disagreement_note
         elif skipped_models:
-            callout_type = "disagreement"
+            # Skipped = availability issue, not a genuine model disagreement
+            callout_type = "crosscheck"
             callout_text = (
                 f"{', '.join(skipped_models)} {'was' if len(skipped_models)==1 else 'were'} "
                 f"unavailable (rate limit or API error) — answered with {len(responses)} "
                 f"model{'s' if len(responses)!=1 else ''}."
             )
         elif len(responses) >= 2 and not disagreement_note:
+            # Will be overridden to "disagreement" below if disagree_options is populated
             callout_type = "crosscheck"
             callout_text = (
                 f"Cross-checked with {len(responses)} models. "
@@ -279,18 +281,46 @@ class VeritasRouter:
 
         total_ms = round((time.time() - t0) * 1000, 1)
 
-        # Phase 5.4: include all model responses when models disagreed
+        # Phase 5.4: include all model responses when models genuinely disagreed.
+        # Triggered by peer review disagreement (Max mode) OR when High mode models
+        # gave meaningfully different answers (detected by simple text diff heuristic).
         disagree_options = None
-        if disagreement_note and len(responses) >= 2:
+        if len(responses) >= 2:
             from core.config import SUPPORTED_MODELS as _SM
-            disagree_options = [
-                {
-                    "model_id": r.model_id,
-                    "display_name": _SM.get(r.model_id, {}).get("display_name", r.model_id),
-                    "response": r.text,
-                }
-                for r in responses
-            ]
+            genuine_disagreement = False
+            if disagreement_note:
+                genuine_disagreement = True
+            else:
+                # Detect High-mode disagreements: if the shortest response shares <60%
+                # of words with the longest response, treat it as a real disagreement.
+                texts = [r.text.lower() for r in responses]
+                words = [set(t.split()) for t in texts]
+                for i in range(len(words)):
+                    for j in range(i + 1, len(words)):
+                        overlap = len(words[i] & words[j])
+                        union   = len(words[i] | words[j])
+                        if union > 0 and (overlap / union) < 0.60:
+                            genuine_disagreement = True
+                            break
+                    if genuine_disagreement:
+                        break
+            if genuine_disagreement:
+                disagree_options = [
+                    {
+                        "model_id": r.model_id,
+                        "display_name": _SM.get(r.model_id, {}).get("display_name", r.model_id),
+                        "response": r.text,
+                    }
+                    for r in responses
+                ]
+                # Upgrade callout to disagreement if High mode detected divergence
+                if not disagreement_note and callout_type == "crosscheck":
+                    callout_type = "disagreement"
+                    callout_text = (
+                        f"The models gave different answers. I selected the most reliable "
+                        f"response based on their track records, but you may want to verify "
+                        f"this independently."
+                    )
 
         return RouterResponse(
             response=winner.text,
