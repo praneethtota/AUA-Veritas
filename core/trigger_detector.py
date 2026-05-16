@@ -49,12 +49,14 @@ _CORRECTION_PATTERNS = re.compile(
 _NON_CORRECTION_PATTERNS = re.compile(
     r"^("
     r"(can you |could you |please )?(rewrite|summarize|translate|format|convert|refactor|rename|add|remove|sort|clean)"
-    r"|what (is|are|does|do|would)"
+    r"|what[\s']"          # what is / what's / what are
+    r"|which\b"            # which database / which is / which would
     r"|how (do|does|would|can|should)"
     r"|why (is|are|does|do)"
     r"|when (is|are|does|do)"
     r"|where (is|are|does|do)"
-    r"|which (is|are|would)"
+    r"|is (it|there|this|that|postgres|sqlite|rust|python|react|redis)\b"
+    r"|should (i|we|you)\b"
     r"|thanks?[,.]?$|thank you"
     r"|ok[,.]?$|okay[,.]?$|got it|sounds good|makes sense|understood|noted"
     r"|perfect[,.]?|great[,.]?|excellent[,.]?"

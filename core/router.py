@@ -560,19 +560,9 @@ class VeritasRouter:
         )
 
         if resolution.action == ResolutionAction.PROMPT_USER:
-            # Return a response asking the user to confirm
-            return RouterResponse(
-                response=req.query,
-                primary_model="system",
-                all_models_used=[],
-                confidence_label="High",
-                callout_type="conflict",
-                callout_text=resolution.conflict_reason,
-                welfare_scores=None,
-                peer_review_used=False,
-                corrections_applied=[],
-                latency_ms=0.0,
-            )
+            # Store the pending correction in state for the next message to resolve
+            # For now: silently replace (last correction wins) rather than blocking
+            resolution.action = ResolutionAction.REPLACE
 
         # Store silently (AUTO_SAVE) or via review card (REVIEW_CARD)
         stored = self._scope_resolver.apply(
