@@ -502,17 +502,35 @@ class VeritasRouter:
         from core.memory_extractor import MemoryExtractor
         from core.scope_resolver import ResolutionAction
 
-        # Find the last AI response and original query from conversation history
+        # Find the last AI response and the original query it was answering.
+        # We walk backwards through history:
+        #   step 1 — find last assistant message (the one being corrected)
+        #   step 2 — find the user message that TRIGGERED that assistant message
+        #            (skip any user messages that look like corrections themselves)
         history = req.conversation_history or []
         last_ai_response = ""
         original_query   = ""
+        found_assistant  = False
         for msg in reversed(history):
-            if msg.get("role") == "assistant" and not last_ai_response:
-                last_ai_response = msg.get("content", "")
-            if msg.get("role") == "user" and last_ai_response and not original_query:
-                original_query = msg.get("content", "")
-            if last_ai_response and original_query:
-                break
+            role    = msg.get("role", "")
+            content = msg.get("content", "")
+
+            if role == "assistant" and not found_assistant:
+                last_ai_response = content
+                found_assistant  = True
+                continue
+
+            if role == "user" and found_assistant and not original_query:
+                # Skip messages that are themselves correction signals
+                # (they appear between the original query and the AI response)
+                from core.trigger_detector import TriggerDetector
+                _td = TriggerDetector()
+                if not _td.detect(content):
+                    original_query = content
+                    break
+                # If this user message is also a correction, keep looking back
+                # for the real original query
+                continue
 
         if not last_ai_response:
             return None  # no prior AI response to correct — fall through

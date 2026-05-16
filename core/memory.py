@@ -23,22 +23,51 @@ class VeritasMemory:
     def retrieve(
         self, query: str, domain: str, user_id: str = "local", limit: int = 5
     ) -> list[dict]:
-        """Retrieve relevant corrections for a query."""
-        # Simple keyword match on canonical_query for MVP
-        # Upgrade path: embedding similarity in Phase 5
+        """
+        Retrieve relevant corrections for a query.
+
+        Scoring: keyword overlap (primary) + domain match bonus (secondary).
+        Domain is NOT used as a hard filter — corrections stored under a slightly
+        different domain still get surfaced if the keywords match.
+        """
+        # Fetch all active corrections for this user (no domain filter)
         all_corrections = self._state.query(
             "corrections",
-            filters={"user_id": user_id, "domain": domain},
-            limit=200,
+            filters={"user_id": user_id},
+            limit=500,
         )
-        # Score by keyword overlap
+        # Exclude superseded corrections
+        active = [c for c in all_corrections if c.get("scope") != "superseded"]
+
+        # Score by keyword overlap + domain bonus
         query_words = set(query.lower().split())
+        # Also tokenize the query into substrings for partial matching
+        query_tokens = set()
+        for w in query_words:
+            query_tokens.add(w)
+            if len(w) > 4:  # add stems for longer words
+                query_tokens.add(w[:5])
+
         scored = []
-        for c in all_corrections:
-            canon_words = set(c.get("canonical_query", "").lower().split("_"))
-            overlap = len(query_words & canon_words)
-            if overlap > 0:
-                scored.append((overlap, c))
+        for c in active:
+            canon = c.get("canonical_query", "")
+            canon_words = set(canon.lower().split("_"))
+
+            # Primary: direct keyword overlap
+            overlap = len(query_tokens & canon_words)
+
+            # Also check corrective_instruction for keyword overlap
+            instruction_words = set(c.get("corrective_instruction", "").lower().split())
+            instr_overlap = len(query_words & instruction_words)
+
+            # Domain bonus (0.5 weight — not a hard filter)
+            domain_bonus = 0.5 if c.get("domain") == domain else 0.0
+
+            total_score = overlap + (instr_overlap * 0.3) + domain_bonus
+
+            if total_score > 0:
+                scored.append((total_score, c))
+
         scored.sort(key=lambda x: -x[0])
         return [c for _, c in scored[:limit]]
 
