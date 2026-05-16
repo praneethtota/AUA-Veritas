@@ -140,4 +140,20 @@ Purpose: distinguish design choices from bug fixes in git history. Allows revert
 
 ---
 
+### 2026-05-16 — Per-model context backup architecture
+
+**[DESIGN]** Context backups are generated per-model, not shared across models.
+
+When a conversation has multiple models (e.g. GPT-4o, Claude, Llama), each model tracks its own token count independently against its own context window limit. When any one model approaches its limit, Veritas asks **that specific model** to generate its own context summary:
+
+> "Summarise the context needed to continue this conversation in a new window without losing preferences, decisions, corrections, or open tasks. Max 500 tokens."
+
+The summary is stored in SQLite with both `model_id` and `conversation_id`. Model A's backup is only ever injected back into Model A. Model B's backup only goes to Model B. They never cross.
+
+Reason: each model tracks the conversation through its own lens, phrasing, and reasoning style. A shared summary would be a lossy average. Per-model summaries are faithful to each model's own understanding.
+
+A 3-model conversation has 3 independent context counters and potentially 3 separate backup records. At any moment, models may be at different refresh stages — one on its original thread, another on its third refresh. The user sees none of this.
+
+---
+
 *End of log. New entries go at the bottom.*

@@ -887,21 +887,27 @@ The README and old roadmap describe this: each provider in the Settings page has
 ### Phase 6 — Context Continuity (seamless handoff)
 **Goal:** Deliver the "Continue where you left off" feature described as Section 2 of the README. This is one of the three core value propositions. It is not built at all.
 
-**6.1 — Shadow token counter**
-Track an estimated token count for each active conversation based on messages sent and received. Store per-conversation in SQLite. Each model's context window size is stored in `config.py` (already has `context_window` field in `SUPPORTED_MODELS`). Trigger a backup when the estimated token count exceeds 70% of the smallest connected model's context window.
+**6.1 — Per-model shadow token counter**
+Track an estimated token count **per model per conversation** — not one shared counter for the whole conversation. Each model has its own context window size (stored in `config.py` under `context_window` in `SUPPORTED_MODELS`). A model's backup is triggered independently when its own token count exceeds 70% of its own context window limit. A conversation with 3 models has 3 independent counters running simultaneously.
 
-**6.2 — Context backup generation**
-When the backup threshold is reached:
-1. Ask the primary model (or cheapest available judge): "Summarise the key decisions, rules, corrections, and open tasks from this conversation in a numbered list. Max 500 tokens."
-2. Combine the model-generated summary with the project's active corrections from the memory store.
-3. Store the combined block as a `context_backup` record in SQLite, linked to the conversation.
+**6.2 — Per-model context backup generation**
+When a model's threshold is reached, ask **that model** (and only that model):
 
-**6.3 — Seamless handoff**
-When the user sends the next message after a backup:
-1. Start a fresh underlying model session (new API call thread).
-2. Inject the stored context backup block as a system message at the top.
-3. Continue showing the same conversation window to the user — no visible break.
-4. Amber callout in chat: "Context window reached — I've refreshed your project memory to keep going."
+> "Please summarise the context needed to continue this conversation in a new window without losing any preferences, decisions, corrections, or open tasks. Be concise — max 500 tokens."
+
+The model generates its own summary in its own words and reasoning style. Store the result as a `context_backup` record in SQLite with `model_id` and `conversation_id` fields. A conversation with 3 models will have up to 3 separate backup records — one per model.
+
+Model A's backup is never shown to Model B. Model B's backup is never shown to Model A.
+
+**6.3 — Per-model seamless handoff**
+When the user sends the next message after a model's backup is ready:
+1. Start a fresh API call thread for that model only.
+2. Inject that model's own backup summary as its system message.
+3. The other models in the conversation continue on their existing threads (they may not have hit their limit yet).
+4. Continue showing the same conversation window — no visible break.
+5. Amber callout shown once: "Context window reached for [model name] — I've refreshed its memory to keep going."
+
+This means at any moment, different models in the same conversation may be at different stages of their context — one may be on its original thread, another may already be on its third refresh. The user sees none of this.
 
 **6.4 — Inactivity-based backup**
 Also trigger a backup when the user is away for a configurable period. When they return, the backup is ready to inject.
