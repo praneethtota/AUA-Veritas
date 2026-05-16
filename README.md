@@ -26,7 +26,7 @@ AUA-Veritas wraps frontier AI models (ChatGPT, Claude, Gemini, and more) and run
 control logic silently underneath — routing, welfare-maximizing model selection, contradiction
 detection, peer review, and correction memory that improves over time.
 
-You get a more truthful answer than any single model gives directly.
+It shows you when the models agree, and warns you when they don’t.
 
 ## Accuracy levels
 
