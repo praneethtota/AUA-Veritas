@@ -156,4 +156,28 @@ A 3-model conversation has 3 independent context counters and potentially 3 sepa
 
 ---
 
+### 2026-05-16 — Context backup is invisible by default, opt-out in Settings
+
+**[DESIGN]** The context backup system is entirely hidden from the user. No prompts, no interruptions, no "do you want me to save context?" questions. The model handles it silently in the background.
+
+The user has one Settings toggle: **Context backup** — On / Off.
+
+Default: **On.**
+
+Why opt-out rather than opt-in: the feature only has value if it runs automatically. An opt-in feature that most users never find helps nobody.
+
+The Settings section must clearly explain two things before the toggle:
+1. **Tokens:** Each backup uses approximately 500 tokens from the model that generates it. With 3 models, that is up to 1,500 tokens per backup event. The frequency setting (auto / 15 min / hourly / daily / manual) controls how often this happens.
+2. **Privacy:** The backup prompt asks the model to summarise your conversation. That summary is sent to the model provider's API as a normal API call — subject to the same privacy terms as any other message you send through Veritas. If you do not want conversation summaries sent to model providers, turn this off.
+
+The toggle lives under a dedicated **Context backup** section in Settings, separate from API keys. It has:
+- On / Off toggle (default On)
+- Frequency selector (only shown when On): Automatic / Every 15–20 min / Hourly / Daily / Manual only
+- One-line cost estimate: "Approximately X tokens per backup event across your connected models"
+- Privacy note: "Backup summaries are sent to your connected model providers as normal API calls."
+
+No other UI. The user never sees backup events happening, which models have been refreshed, or how many times a refresh has occurred — unless they open Look Under the Hood (Phase 6.5).
+
+---
+
 *End of log. New entries go at the bottom.*
