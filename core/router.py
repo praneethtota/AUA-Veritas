@@ -474,6 +474,7 @@ class VeritasRouter:
         try:
             self._state.append("audit_log", {
                 "audit_id":          str(uuid.uuid4()),
+                "user_id":           "local",
                 "model_id":          model_id,
                 "event_type":        "score_update",
                 "score_before":      current,

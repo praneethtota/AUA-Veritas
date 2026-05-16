@@ -44,6 +44,7 @@ class Scope(str, Enum):
     GLOBAL       = "global"
     PROJECT      = "project"
     CONVERSATION = "conversation"
+    SUPERSEDED   = "superseded"   # soft-deleted corrections
 
 # Priority: higher number = higher priority
 SCOPE_PRIORITY = {
@@ -117,7 +118,10 @@ class ScopeResolver:
         Returns:
             ResolutionResult describing what action to take.
         """
-        proposed_scope = Scope(extraction.scope)
+        try:
+            proposed_scope = Scope(extraction.scope)
+        except ValueError:
+            proposed_scope = Scope.PROJECT  # default if unknown scope value
 
         # ── Conversation scope: always store, no conflict check ───────────────
         if proposed_scope == Scope.CONVERSATION:
@@ -142,7 +146,10 @@ class ScopeResolver:
                 silent=True,
             )
 
-        existing_scope = Scope(existing.get("scope", "global"))
+        try:
+            existing_scope = Scope(existing.get("scope", "global"))
+        except ValueError:
+            existing_scope = Scope.PROJECT
 
         # ── Rule 3: Identical canonical_query → last correction wins silently ─
         if existing.get("canonical_query") == extraction.canonical_query:

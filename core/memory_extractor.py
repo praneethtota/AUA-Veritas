@@ -117,6 +117,7 @@ class ExtractionResult:
         """
         return {
             "correction_id":          self.extraction_id,
+            "user_id":                "local",
             "model_id":               self.model_id,
             "score_delta":            self._score_delta(),
             "reason":                 self.reason,
@@ -136,6 +137,7 @@ class ExtractionResult:
         """Convert to audit_log entry for Look Under the Hood graph."""
         return {
             "audit_id":           str(uuid.uuid4()),
+            "user_id":            "local",
             "model_id":           self.model_id,
             "event_type":         "correction_stored",
             "score_before":       score_before,
