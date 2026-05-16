@@ -15,10 +15,12 @@ const PROVIDERS = [
 ]
 
 interface Props {
+  darkMode: boolean
+  onToggleDarkMode: (dark: boolean) => void
   onClose: () => void
 }
 
-export default function SettingsPage({ onClose }: Props) {
+export default function SettingsPage({ darkMode, onToggleDarkMode, onClose }: Props) {
   const [keyStatus, setKeyStatus] = useState<Record<string, boolean>>({})
   const [newKeys, setNewKeys] = useState<Record<string, string>>({})
   const [testing, setTesting] = useState<Record<string, 'idle' | 'loading' | 'ok' | 'error'>>({})
@@ -68,9 +70,10 @@ export default function SettingsPage({ onClose }: Props) {
       zIndex: 9998, padding: 24,
     }}>
       <div style={{
-        background: '#fff', borderRadius: 14, width: '100%', maxWidth: 520,
+        borderRadius: 14, width: '100%', maxWidth: 520,
         maxHeight: '85vh', overflow: 'hidden', display: 'flex', flexDirection: 'column',
         boxShadow: '0 20px 60px rgba(0,0,0,0.15)',
+        background: 'var(--bg-surface)',
       }}>
         {/* Header */}
         <div style={{
@@ -87,7 +90,42 @@ export default function SettingsPage({ onClose }: Props) {
 
         {/* Body */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '16px 20px' }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 12 }}>
+
+          {/* Appearance */}
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 12 }}>
+              Appearance
+            </div>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '12px 14px', borderRadius: 8,
+              border: '1px solid var(--border)', background: 'var(--bg-surface)',
+            }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Dark mode</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Switch between light and dark theme</div>
+              </div>
+              {/* Toggle */}
+              <button
+                onClick={() => onToggleDarkMode(!darkMode)}
+                style={{
+                  width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+                  background: darkMode ? 'var(--accent)' : 'var(--border)',
+                  position: 'relative', transition: 'background 0.2s',
+                  flexShrink: 0,
+                }}
+              >
+                <div style={{
+                  position: 'absolute', top: 3, left: darkMode ? 23 : 3,
+                  width: 18, height: 18, borderRadius: 9, background: '#fff',
+                  transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                }} />
+              </button>
+            </div>
+          </div>
+
+          {/* API Keys */}
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', marginBottom: 12 }}>
             API Keys
           </div>
 

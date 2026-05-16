@@ -1,0 +1,27 @@
+/* Dark/light mode CSS variables — applied via [data-theme] on <html> */
+:root,[data-theme="light"]{
+  --bg-primary:#fafaf8;--bg-secondary:#f5f5f2;--bg-surface:#ffffff;--bg-hover:#f0f0ec;--bg-active:#e8e8f0;
+  --border:#e5e7eb;--border-light:#f3f4f6;
+  --text-primary:#111827;--text-secondary:#6b7280;--text-muted:#9ca3af;--text-disabled:#d1d5db;
+  --accent:#4338ca;--accent-hover:#3730a3;--accent-subtle:#ede9fe;--accent-text:#5b21b6;
+  --success:#059669;--success-bg:#d1fae5;--warning:#f59e0b;--warning-bg:#fef3c7;--error:#ef4444;--error-bg:#fee2e2;
+  --sidebar-bg:#f5f5f2;--sidebar-border:#e5e7eb;
+  --user-bubble-bg:#1f2937;--user-bubble-text:#ffffff;--ai-card-bg:#ffffff;--ai-card-border:#e5e7eb;
+  --input-bg:#ffffff;--input-border:#e5e7eb;--input-focus:#4338ca;
+  --overlay:rgba(0,0,0,0.4);--scrollbar-thumb:#d1d5db;
+}
+[data-theme="dark"]{
+  --bg-primary:#0f0f11;--bg-secondary:#18181b;--bg-surface:#1c1c21;--bg-hover:#27272a;--bg-active:#2d2d36;
+  --border:#2d2d36;--border-light:#27272a;
+  --text-primary:#f4f4f5;--text-secondary:#a1a1aa;--text-muted:#71717a;--text-disabled:#3f3f46;
+  --accent:#6366f1;--accent-hover:#818cf8;--accent-subtle:#1e1b4b;--accent-text:#a5b4fc;
+  --success:#34d399;--success-bg:#064e3b;--warning:#fbbf24;--warning-bg:#451a03;--error:#f87171;--error-bg:#450a0a;
+  --sidebar-bg:#18181b;--sidebar-border:#2d2d36;
+  --user-bubble-bg:#3730a3;--user-bubble-text:#e0e7ff;--ai-card-bg:#1c1c21;--ai-card-border:#2d2d36;
+  --input-bg:#27272a;--input-border:#3f3f46;--input-focus:#6366f1;
+  --overlay:rgba(0,0,0,0.7);--scrollbar-thumb:#3f3f46;
+}
+*,*::before,*::after{box-sizing:border-box;}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg-primary);color:var(--text-primary);-webkit-font-smoothing:antialiased;}
+::-webkit-scrollbar{width:6px;height:6px;}
+::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb);border-radius:3px;}

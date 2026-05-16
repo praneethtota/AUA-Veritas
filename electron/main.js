@@ -298,9 +298,12 @@ function setupIpc() {
 
 // ── App lifecycle ─────────────────────────────────────────────────────────────
 
+// Start backend immediately — before window is ready — so it can warm up
+// in parallel with Electron initialising. Saves 1-2 seconds on cold start.
+startApiServer()
+
 app.whenReady().then(() => {
   setupIpc()
-  startApiServer()
   createMainWindow()
   createTray()
 

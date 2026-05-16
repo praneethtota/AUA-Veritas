@@ -15,7 +15,12 @@ import {
 } from '../api'
 import type { Conversation, Message, AccuracyLevel, ModelInfo, QueryResponse } from '../types'
 
-export default function ChatLayout() {
+interface Props {
+  darkMode: boolean
+  onToggleDarkMode: (dark: boolean) => void
+}
+
+export default function ChatLayout({ darkMode, onToggleDarkMode }: Props) {
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [activeConvId, setActiveConvId] = useState<string | null>(null)
   const [messages, setMessages] = useState<Message[]>([])
@@ -223,7 +228,7 @@ export default function ChatLayout() {
         display: 'grid',
         gridTemplateColumns: '240px 1fr 260px',
         overflow: 'hidden',
-        background: '#fafaf8',
+        background: 'var(--bg-primary)',
       }}>
         <Sidebar
           conversations={conversations}
@@ -272,7 +277,7 @@ export default function ChatLayout() {
         onDismiss={() => setToastMemory(null)}
       />
 
-      {showSettings && <SettingsPage onClose={() => setShowSettings(false)} />}
+      {showSettings && <SettingsPage darkMode={darkMode} onToggleDarkMode={onToggleDarkMode} onClose={() => setShowSettings(false)} />}
       {showHood && <LookUnderTheHood onClose={() => setShowHood(false)} />}
       {showUsage && <UsagePage onClose={() => setShowUsage(false)} />}
     </>

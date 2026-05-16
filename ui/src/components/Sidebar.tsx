@@ -59,7 +59,7 @@ export default function Sidebar({
   return (
     <div style={{
       display: 'flex', flexDirection: 'column', height: '100vh',
-      background: '#f5f5f2', borderRight: '1px solid #e5e7eb', overflow: 'hidden',
+      background: 'var(--sidebar-bg)', borderRight: '1px solid var(--sidebar-border)', overflow: 'hidden',
     }}>
       {/* Header */}
       <div style={{ padding: '16px 14px 12px', borderBottom: '1px solid #e5e7eb', flexShrink: 0 }}>
