@@ -142,8 +142,12 @@ Format: each entry has a timestamp, a severity (P0=crash/data loss, P1=broken fe
 ### 2026-05-15 12:30 — Corrections stored but not injected into follow-up queries
 **Severity:** P1 (core memory feature not working)
 **Symptom:** After "Going forward, always recommend SQLite...", the follow-up "What storage layer should I use?" did not mention SQLite.
-**Root cause (identified):** The correction is stored with `canonical_query = "what_storage_layer_should_i_use_for_this_project"` (derived from the second query, not the original). When the third query comes in, `memory.retrieve()` does keyword overlap between query words and `canonical_query` words. If the query uses different words (e.g. "database" vs "storage"), overlap is zero and the correction is not selected.
-**Status:** Root cause confirmed via DB inspection. Fix not yet applied — see Phase 5A.
+**Root cause 1:** `memory.py retrieve()` used `domain` as a hard pre-filter. If the incoming query was classified as `general` but the correction was stored as `software_engineering`, zero results returned even with perfect keyword overlap.
+**Root cause 2:** `router._handle_correction()` history traversal picked the wrong `original_query`. When the correction trigger fired again on a later query, the traversal found the correction message itself ("Going forward use SQLite") as the `original_query`, giving `canonical_query = going_forward_always_recommend_sqlite...` — which never matches future database queries.
+**Fix 1:** `memory.py retrieve()` — removed domain hard filter. All active corrections scored by keyword overlap + instruction text overlap + domain bonus (0.5 weight). Superseded corrections excluded before scoring.
+**Fix 2:** `router._handle_correction()` — history traversal now skips user messages that are themselves correction signals (detected via TriggerDetector). Keeps looking back until it finds the real original query.
+**Tests:** 179/179 passing after fix.
+**Commit:** b9097dc
 
 ---
 
